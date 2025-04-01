@@ -141,22 +141,31 @@ const TodoList: React.FC<TodoListProps> = ({ nodes, edges }) => {
 
   // Effect to initialize or update taskOrder when nodes/edges change
   useEffect(() => {
+    console.log('useEffect running with nodes:', nodes?.length, 'edges:', edges?.length);
+    
     if (!nodes || nodes.length === 0) {
+      console.log('No nodes, resetting taskOrder');
       setTaskOrder([]);
       return;
     }
-    // Calculate the initial order based on topology
+
     const initialOrderedNodes = getOrderedTasks(nodes, edges);
-    // Update state only if the calculated order differs from the current manual order
-    // This prevents resetting manual order on unrelated node/edge changes (e.g., position)
     const initialOrderedIds = initialOrderedNodes.map(n => n.id);
-    // Simple length check first for performance
-    if (initialOrderedIds.length !== taskOrder.length || initialOrderedIds.some((id, index) => id !== taskOrder[index])) {
-         setTaskOrder(initialOrderedIds);
+    console.log('Current taskOrder:', taskOrder);
+    console.log('Calculated initialOrderedIds:', initialOrderedIds);
+
+    // Compare current and new order
+    const orderChanged =
+      initialOrderedIds.length !== taskOrder.length ||
+      initialOrderedIds.some((id, index) => id !== taskOrder[index]);
+
+    if (orderChanged) {
+      console.log('Order changed, updating taskOrder');
+      setTaskOrder(initialOrderedIds);
+    } else {
+      console.log('Order unchanged, skipping update');
     }
-    // Dependency array includes nodes and edges to recalculate initial order
-    // taskOrder is included to trigger the comparison logic when it changes externally (if needed)
-  }, [nodes, edges, taskOrder]); // Added taskOrder dependency for comparison
+  }, [nodes, edges]); // Removed taskOrder from dependencies
 
 
   const sensors = useSensors(
