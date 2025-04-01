@@ -10,7 +10,7 @@ import type {
 import type { Node, Edge } from 'reactflow';
 
 // Initialize Notion Client
-const notion = new Client({ auth: process.env.NOTION_API_KEY });
+const notion = new Client({ auth: process.env.NOTION_SECRET });
 const databaseId = process.env.NOTION_DATABASE_ID;
 
 // --- Database Property Names (Ensure these match your Notion DB) ---
@@ -138,7 +138,7 @@ export async function POST(request: Request) {
     if (!databaseId) {
         return NextResponse.json({ error: 'Notion Database ID not configured.' }, { status: 500 });
     }
-    if (!process.env.NOTION_API_KEY) {
+    if (!process.env.NOTION_SECRET) {
          return NextResponse.json({ error: 'Notion API Key not configured.' }, { status: 500 });
     }
 
