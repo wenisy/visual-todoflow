@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useMemo, useState, useEffect, useCallback } from 'react';
-import { Typography, Menu, Dropdown, Modal, Button, Checkbox } from 'antd';
+import { Typography, Modal, Button, Checkbox } from 'antd';
 import { Node, Edge, useReactFlow } from 'reactflow';
 import {
   DndContext,
@@ -27,6 +27,7 @@ const { Text } = Typography;
 interface TodoListProps {
   nodes: Node[];
   edges: Edge[];
+  onEdgeContextMenu?: (event: React.MouseEvent, edge: Edge) => void;
 }
 
 // Helper function for topological sort
@@ -154,44 +155,59 @@ const TodoList: React.FC<TodoListProps> = ({ nodes, edges }) => {
   const [taskOrder, setTaskOrder] = useState<string[]>([]);
   const [completedTasks, setCompletedTasks] = useState<Set<string>>(new Set()); // Added state for completed tasks
   const [deleteConfirm, setDeleteConfirm] = useState<Node | null>(null);
-  const [contextMenu, setContextMenu] = useState<{
-    visible: boolean;
-    x: number;
-    y: number;
-    edge?: Edge;
-  }>({
-    visible: false,
-    x: 0,
-    y: 0
-  });
 
   const nodeMap = useMemo(() => new Map(nodes.map(node => [node.id, node])), [nodes]);
 
+  // Update taskOrder when edges change
   useEffect(() => {
-    if (!nodes || nodes.length === 0) {
-      setTaskOrder([]);
-      return;
-    }
-    const initialOrderedNodes = getOrderedTasks(nodes, edges);
-    const initialOrderedIds = initialOrderedNodes.map(n => n.id);
+    // Get all nodes that have connections
+    const connectedNodes = new Set<string>();
+    edges.forEach(edge => {
+      const sourceExists = nodes.some(n => n.id === edge.source);
+      const targetExists = nodes.some(n => n.id === edge.target);
+      if (sourceExists && targetExists) {
+        connectedNodes.add(edge.source);
+        connectedNodes.add(edge.target);
+      }
+    });
 
-    const orderChanged =
-      initialOrderedIds.length !== taskOrder.length ||
-      initialOrderedIds.some((id, index) => id !== taskOrder[index]);
+    // Get connected nodes in topological order
+    const connectedNodesList = nodes.filter(node => connectedNodes.has(node.id));
+    const orderedNodes = getOrderedTasks(connectedNodesList, edges);
+    const newOrder = orderedNodes.map(n => n.id);
 
-    if (orderChanged) {
-      setTaskOrder(initialOrderedIds);
-    }
-    // Initialize completedTasks based on node data if needed on initial load or node changes
+    // Update taskOrder if it has changed
+    setTaskOrder(newOrder);
+
+    // Update completed tasks
     const initialCompleted = new Set<string>();
     nodes.forEach(node => {
-        if (node.data?.completed) {
-            initialCompleted.add(node.id);
-        }
+      if (node.data?.completed) {
+        initialCompleted.add(node.id);
+      }
     });
     setCompletedTasks(initialCompleted);
+  }, [nodes, edges]);
 
-  }, [nodes, edges]); // Removed taskOrder from dependency array to avoid loop
+  // Effect to remove disconnected nodes from taskOrder
+  useEffect(() => {
+    // Find nodes that should be removed from taskOrder
+    // A node should be removed if it has no active connections
+    const connectedNodes = new Set<string>();
+    edges.forEach(edge => {
+      const sourceExists = nodes.some(n => n.id === edge.source);
+      const targetExists = nodes.some(n => n.id === edge.target);
+      if (sourceExists && targetExists) {
+        connectedNodes.add(edge.source);
+        connectedNodes.add(edge.target);
+      }
+    });
+
+    // Filter out nodes that are no longer connected
+    setTaskOrder(current =>
+      current.filter(nodeId => connectedNodes.has(nodeId))
+    );
+  }, [edges, nodes]);
 
   const sensors = useSensors(
     useSensor(PointerSensor),
@@ -251,54 +267,14 @@ const TodoList: React.FC<TodoListProps> = ({ nodes, edges }) => {
   }, [setNodes]);
 
 
-  const handleEdgeRemove = useCallback(() => {
-    if (contextMenu.edge) {
-      setEdges((eds) => eds.filter((e) => e.id !== contextMenu.edge!.id));
-      setContextMenu((prev) => ({ ...prev, visible: false }));
-    }
-  }, [setEdges, contextMenu.edge]);
 
-  const onEdgeContextMenu = (event: React.MouseEvent, edge: Edge) => {
-    event.preventDefault();
-    setContextMenu({
-      visible: true,
-      x: event.clientX,
-      y: event.clientY,
-      edge: edge,
-    });
-  };
+  // Use taskOrder to determine sorted and unsorted tasks
+  const unsortedTasks = useMemo(() => {
+    const taskOrderSet = new Set(taskOrder);
+    return nodes.filter(node => !taskOrderSet.has(node.id));
+  }, [nodes, taskOrder]);
 
-  const menuOverlay = (
-    <Menu
-      items={[
-        {
-          key: 'remove',
-          label: '删除连接',
-          onClick: handleEdgeRemove
-        },
-        {
-          key: 'cancel',
-          label: '取消',
-          onClick: () => setContextMenu((prev) => ({ ...prev, visible: false }))
-        }
-      ]}
-    />
-  );
-
-  const { sortedTasks, unsortedTasks } = useMemo(() => {
-    const connectedNodes = new Set<string>();
-    edges.forEach(edge => {
-      connectedNodes.add(edge.source);
-      connectedNodes.add(edge.target);
-    });
-
-    const sorted = nodes.filter(node => connectedNodes.has(node.id));
-    const unsorted = nodes.filter(node => !connectedNodes.has(node.id));
-    
-    return { sortedTasks: sorted, unsortedTasks: unsorted };
-  }, [nodes, edges]);
-
-  if (sortedTasks.length === 0 && unsortedTasks.length === 0) {
+  if (taskOrder.length === 0 && unsortedTasks.length === 0) {
     return <div style={{ padding: '16px', color: '#888' }}>Add nodes to the canvas to create tasks.</div>;
   }
 
@@ -399,25 +375,6 @@ const TodoList: React.FC<TodoListProps> = ({ nodes, edges }) => {
         </div>
       </div>
 
-      {contextMenu.visible && (
-        <div
-          style={{
-            position: 'fixed',
-            left: contextMenu.x,
-            top: contextMenu.y,
-            zIndex: 1000
-          }}
-          onClick={() => setContextMenu((prev) => ({ ...prev, visible: false }))}
-        >
-          <Dropdown
-            open
-            overlay={menuOverlay}
-            trigger={[]}
-          >
-            <div style={{ width: 0, height: 0 }} />
-          </Dropdown>
-        </div>
-      )}
 
       {/* Delete Confirmation Modal */}
       <Modal
