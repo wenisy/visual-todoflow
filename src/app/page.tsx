@@ -94,7 +94,45 @@ const initialEdges: Edge[] = [];
 
 // Initialize ID counter
 let id = 1;
+// --- Local Storage Helpers ---
+const LOCAL_STORAGE_PREFIX = 'visual-todoflow:';
 
+const saveToLocalStorage = (uuid: string, data: { nodes: Node[], edges: Edge[], tag: string }) => {
+ if (!uuid) return; // Don't save if UUID is missing
+ try {
+   localStorage.setItem(`${LOCAL_STORAGE_PREFIX}${uuid}`, JSON.stringify(data));
+   // console.log(`Saved to LS: ${uuid}`);
+ } catch (error) {
+   console.error("Failed to save to local storage:", error);
+   // Optionally, inform the user or implement more robust error handling
+ }
+};
+
+const loadFromLocalStorage = (uuid: string): { nodes: Node[], edges: Edge[], tag: string } | null => {
+ if (!uuid) return null;
+ try {
+   const item = localStorage.getItem(`${LOCAL_STORAGE_PREFIX}${uuid}`);
+   // console.log(`Attempted load from LS: ${uuid}, Found: ${!!item}`);
+   return item ? JSON.parse(item) : null;
+ } catch (error) {
+   console.error("Failed to load from local storage:", error);
+   localStorage.removeItem(`${LOCAL_STORAGE_PREFIX}${uuid}`); // Clear corrupted item
+   return null;
+ }
+};
+
+const clearFromLocalStorage = (uuid: string) => {
+  if (!uuid) return;
+ try {
+   localStorage.removeItem(`${LOCAL_STORAGE_PREFIX}${uuid}`);
+   // console.log(`Cleared from LS: ${uuid}`);
+ } catch (error) {
+   console.error("Failed to clear from local storage:", error);
+ }
+};
+
+
+// --- Draggable Sidebar Item ---
 // --- Draggable Sidebar Item ---
 // ... (DraggableItem component remains the same)
 interface DraggableItemProps {
@@ -132,7 +170,7 @@ const DraggableItem: React.FC<DraggableItemProps> = ({ nodeType, label, icon }) 
 
 // --- Main Flow Component ---
 const FlowEditor: React.FC = () => {
-  const { modal } = App.useApp();
+  // const { modal } = App.useApp(); // Removed unused modal
   const router = useRouter(); // Get router instance
   const searchParams = useSearchParams(); // Get search params
   const reactFlowWrapper = useRef<HTMLDivElement>(null);
@@ -150,35 +188,66 @@ const FlowEditor: React.FC = () => {
   // Define loadFlowchart outside of onClick
   // Helper function to generate UUID
 
-  const loadFlowchart = useCallback(async (uuid: string) => {
-    console.log('loadFlowchart called for uuid:', uuid);
-    setIsLoading(true);
-    try {
-      const response = await fetch('/api/notion/load', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ uuid }),
-      });
+ const loadFlowchart = useCallback(async (uuid: string, options: { skipLocalStorageCheck?: boolean } = {}) => {
+   console.log('loadFlowchart called for uuid:', uuid);
+   setIsLoading(true);
+   setHasUnsavedChanges(false); // Assume loaded state is saved state initially
 
-      if (!response.ok) {
-        throw new Error('Failed to load flowchart');
-      }
+   // 1. Try loading from local storage first (unless skipped)
+   if (!options.skipLocalStorageCheck) {
+       const localData = loadFromLocalStorage(uuid);
+       if (localData) {
+           console.log('Loaded from local storage:', uuid);
+           setNodes(localData.nodes);
+           setEdges(localData.edges);
+           setCurrentTag(localData.tag); // Load tag from LS as well
+           setCurrentUuid(uuid); // Ensure currentUuid is set
+           // Still set loading false after potential background fetch
+       }
+   }
 
-      const data = await response.json();
-      setNodes(data.nodes || []);
-      setEdges(data.edges || []);
-      setCurrentTag(data.tag);
-      setCurrentUuid(data.uuid);
-      setHasUnsavedChanges(false);
-    } catch (error) {
-      console.error('Failed to load flowchart:', error);
-      message.error('Failed to load flowchart');
-    } finally {
-      console.log('loadFlowchart completed');
-      setIsLoading(false);
-    }
+
+   // 2. Fetch from API to ensure data is up-to-date / if not in LS
+   try {
+     const response = await fetch('/api/notion/load', {
+       method: 'POST',
+       headers: { 'Content-Type': 'application/json' },
+       body: JSON.stringify({ uuid }),
+     });
+
+     if (!response.ok) {
+       // If fetch fails but we loaded from LS, keep LS data, show warning
+       if (loadFromLocalStorage(uuid)) {
+           message.warning('Failed to sync with server, showing local version.');
+       } else {
+           throw new Error('Failed to load flowchart and no local version found');
+       }
+     } else {
+       const data = await response.json();
+       // Only update state if fetched data is different from current state
+       // (to avoid unnecessary re-renders if LS was up-to-date)
+       // Note: Deep comparison might be needed for accuracy, but simple length check for now
+       if (nodes.length !== data.nodes?.length || edges.length !== data.edges?.length || currentTag !== data.tag) {
+            console.log('Updating state from fetched data:', uuid);
+            setNodes(data.nodes || []);
+            setEdges(data.edges || []);
+            setCurrentTag(data.tag);
+            // Update local storage with fetched data
+            saveToLocalStorage(uuid, { nodes: data.nodes || [], edges: data.edges || [], tag: data.tag });
+       }
+       setCurrentUuid(data.uuid); // Always ensure UUID is correct from source
+       setHasUnsavedChanges(false); // Reset unsaved changes flag after successful load/sync
+     }
+   } catch (error) {
+     console.error('Failed to load flowchart:', error);
+     // Only show error if we didn't load from LS
+     if (!loadFromLocalStorage(uuid)) {
+         message.error('Failed to load flowchart');
+     }
+   } finally {
+     console.log('loadFlowchart fetch attempt completed');
+     setIsLoading(false); // Set loading false after fetch attempt
+   }
   }, [setNodes, setEdges, setCurrentTag, setCurrentUuid]); // Added setCurrentUuid dependency
 
   const [isTagModalVisible, setIsTagModalVisible] = useState(false);
@@ -460,44 +529,47 @@ const FlowEditor: React.FC = () => {
       }
     };
     fetchFlowcharts();
-  }, []);
+  }, []); // Fetch list of saved flowcharts on mount
 
-  // Effect to load flowchart based on URL parameter on initial load/param change
+  // Effect for initial load logic (URL param or local storage for initial UUID)
   useEffect(() => {
-    const talkUuid = searchParams.get('talk');
-    // Only load if talkUuid exists and is different from the currently loaded UUID
-    if (talkUuid && talkUuid !== currentUuid) {
-      // Check for unsaved changes before automatically loading
-      if (hasUnsavedChanges) {
-        modal.confirm({
-          title: '未保存的更改',
-          content: '您有未保存的更改。是否放弃更改并加载链接中的流程图？',
-          okText: '加载',
-          cancelText: '取消',
-          onOk: () => loadFlowchart(talkUuid),
-          onCancel: () => {
-            // Optionally, remove the 'talk' param if the user cancels
-            router.push('/', { scroll: false });
-          }
-        });
-      } else {
-        loadFlowchart(talkUuid);
+    const talkUuidFromUrl = searchParams.get('talk');
+
+    if (talkUuidFromUrl) {
+      // If URL has talk param and it's different from current, load it
+      if (talkUuidFromUrl !== currentUuid) {
+        console.log("Loading from URL param:", talkUuidFromUrl);
+        loadFlowchart(talkUuidFromUrl);
+      }
+    } else {
+      // No URL param, try loading initial state from local storage using the generated UUID
+      console.log("No URL param, checking LS for initial UUID:", currentUuid);
+      const initialLocalData = loadFromLocalStorage(currentUuid);
+      if (initialLocalData) {
+        console.log("Loading initial state from LS:", currentUuid);
+        setNodes(initialLocalData.nodes);
+        setEdges(initialLocalData.edges);
+        setCurrentTag(initialLocalData.tag);
+        setHasUnsavedChanges(true); // Mark as unsaved if loaded from LS
       }
     }
-  }, [searchParams, loadFlowchart, hasUnsavedChanges, modal, router, currentUuid]); // Add dependencies
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams]); // Run only when searchParams change (effectively on initial load and URL changes)
+  // Note: Dependencies like loadFlowchart, currentUuid are intentionally omitted
+  // to make this run primarily based on URL changes or initial mount state.
 
-  // Update hasUnsavedChanges when nodes or edges change (excluding initial load from URL)
+
+  // Auto-save to local storage on changes
   useEffect(() => {
-    // Check if nodes/edges are the initial empty arrays or if it's the result of a load operation
-    const isInitial = nodes === initialNodes && edges === initialEdges;
-    // const isLoadingFromUrl = !!searchParams.get('talk'); // Removed unused variable
+    // Don't save initial empty state immediately on mount unless interacted with
+    const isTrulyInitial = nodes === initialNodes && edges === initialEdges && !hasUnsavedChanges;
 
-    // Only set unsaved changes if it's not the initial state and not immediately after loading from URL
-    // This prevents marking as unsaved right after loading
-    if (!isInitial && !isLoading) { // Check isLoading state
-       setHasUnsavedChanges(true);
+    if (!isLoading && !isTrulyInitial && currentUuid) {
+      saveToLocalStorage(currentUuid, { nodes, edges, tag: currentTag });
+      setHasUnsavedChanges(true); // Mark changes as unsaved when saving to LS
+      console.log("Auto-saved to LS for UUID:", currentUuid);
     }
-  }, [nodes, edges, searchParams, isLoading]); // Added isLoading dependency
+  }, [nodes, edges, currentTag, currentUuid, isLoading, hasUnsavedChanges]); // Depend on state being saved
 
   // Function to actually perform the save operation with a tag
   const confirmSave = async (tag: string) => {
@@ -547,6 +619,9 @@ const FlowEditor: React.FC = () => {
       }
       message.success({ content: result.message || 'Saved successfully!', key: 'save_notion', duration: 3 }); // Duration 3s
       setHasUnsavedChanges(false);
+
+      // Clear local storage for this UUID on successful save
+      clearFromLocalStorage(uuid); // Use the uuid that was saved
 
       // Refresh tags list
       const flowchartsResponse = await fetch('/api/notion/list-tags');
@@ -605,26 +680,15 @@ const FlowEditor: React.FC = () => {
             <Button
               icon={<PlusOutlined />}
               onClick={() => {
-                if (hasUnsavedChanges) {
-                  modal.confirm({
-                    title: '未保存的更改',
-                    content: '当前的更改尚未保存，是否继续新建？',
-                    okText: '继续',
-                    cancelText: '取消',
-                    onOk: () => {
-                      setNodes([]);
-                      setEdges([]);
-                      setCurrentTag("未命名");
-                      setCurrentUuid(generateUuid());
-                      setHasUnsavedChanges(false);
-                    }
-                  });
-                } else {
-                  setNodes([]);
-                  setEdges([]);
-                  setCurrentTag("未命名");
-                  setCurrentUuid(generateUuid());
-                }
+                // Directly create new canvas state
+                const newUuid = generateUuid();
+                setNodes([]);
+                setEdges([]);
+                setCurrentTag("未命名");
+                setCurrentUuid(newUuid);
+                setHasUnsavedChanges(false); // A new canvas starts as "saved"
+                router.push('/', { scroll: false }); // Clear URL params
+                // The auto-save effect will save this new empty state to LS under newUuid
               }}
             >
               新建
@@ -662,28 +726,17 @@ const FlowEditor: React.FC = () => {
                             backgroundColor: currentUuid === flowchart.uuid ? '#e6f4ff' : undefined,
                             color: currentUuid === flowchart.uuid ? '#1677ff' : undefined
                           }}
-                          onClick={() => {
-                            const newPath = `/?talk=${flowchart.uuid}`;
-                            const loadAction = () => {
-                              router.push(newPath, { scroll: false }); // Update URL first
-                              loadFlowchart(flowchart.uuid);
-                            };
-
-                            if (hasUnsavedChanges && currentUuid !== flowchart.uuid) { // Only ask if different flowchart and unsaved changes
-                              modal.confirm({
-                                title: '未保存的更改',
-                                content: '当前的更改尚未保存，是否继续加载？',
-                                okText: '继续',
-                                cancelText: '取消',
-                                onOk: loadAction // Execute load action on OK
-                              });
-                            } else if (currentUuid !== flowchart.uuid) { // Load if different flowchart, no unsaved changes
-                              loadAction();
-                            } else {
-                              // If clicking the currently loaded flowchart, just ensure URL is correct
-                              router.push(newPath, { scroll: false });
-                            }
-                          }}
+                         onClick={() => {
+                           const newPath = `/?talk=${flowchart.uuid}`;
+                           // Directly load or update URL, no confirmation needed
+                           if (currentUuid !== flowchart.uuid) {
+                             router.push(newPath, { scroll: false }); // Update URL first
+                             loadFlowchart(flowchart.uuid); // Load the new flowchart (checks LS first)
+                           } else {
+                             // If clicking the currently loaded flowchart, just ensure URL is correct
+                             router.push(newPath, { scroll: false });
+                           }
+                         }}
                         >
                           {isLoading && currentUuid === flowchart.uuid
                             ? `${flowchart.tag} (loading...)`
