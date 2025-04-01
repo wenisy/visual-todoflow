@@ -244,11 +244,56 @@ const FlowEditor: React.FC = () => {
   const [reactFlowInstance, setReactFlowInstance] = useState<ReactFlowInstance | null>(null);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [flowcharts, setFlowcharts] = useState<Array<{ tag: string; uuid: string }>>([]);
-  const [isSaving, setIsSaving] = useState(false); // State for save button loading
-  const [isLoading, setIsLoading] = useState(false); // State for load button loading
-  const [hoveredEdgeId, setHoveredEdgeId] = useState<string | null>(null); // State for hovered edge
-  const [currentTag, setCurrentTag] = useState<string>("未命名"); // State for current tag
-  const [currentUuid, setCurrentUuid] = useState<string>(generateUuid()); // Initialize with UUID for new canvas
+  const [isSaving, setIsSaving] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [hoveredEdgeId, setHoveredEdgeId] = useState<string | null>(null);
+  const [currentTag, setCurrentTag] = useState<string>("未命名");
+  const [currentUuid, setCurrentUuid] = useState<string>(generateUuid());
+
+  // Load unsaved changes from localStorage on mount
+  useEffect(() => {
+    const unsavedData = localStorage.getItem(`${LOCAL_STORAGE_PREFIX}new`);
+    if (unsavedData) {
+      try {
+        const { nodes: savedNodes, edges: savedEdges, tag } = JSON.parse(unsavedData);
+        setNodes(savedNodes);
+        setEdges(savedEdges);
+        setCurrentTag(tag);
+        setHasUnsavedChanges(true);
+      } catch (error) {
+        console.error("Failed to load unsaved changes:", error);
+      }
+    }
+  }, []);
+
+  // Save to localStorage whenever nodes/edges change
+  useEffect(() => {
+    if (nodes.length === 0 && edges.length === 0) return;
+    
+    const data = {
+      nodes,
+      edges,
+      tag: currentTag
+    };
+    
+    // If this is a new flowchart (no UUID) or has unsaved changes
+    if (!currentUuid || hasUnsavedChanges) {
+      localStorage.setItem(`${LOCAL_STORAGE_PREFIX}new`, JSON.stringify(data));
+    }
+  }, [nodes, edges, currentTag, currentUuid, hasUnsavedChanges]);
+  // Add beforeunload event handler
+  useEffect(() => {
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (hasUnsavedChanges) {
+        e.preventDefault();
+        e.returnValue = ''; // Required for Chrome
+        return ''; // Required for other browsers
+      }
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [hasUnsavedChanges]);
 
   // Define loadFlowchart outside of onClick
   // Helper function to generate UUID
@@ -302,6 +347,7 @@ const FlowEditor: React.FC = () => {
        }
        setCurrentUuid(data.uuid); // Always ensure UUID is correct from source
        setHasUnsavedChanges(false); // Reset unsaved changes flag after successful load/sync
+       localStorage.removeItem(`${LOCAL_STORAGE_PREFIX}new`); // Clear unsaved changes after successful load
      }
    } catch (error) {
      console.error('Failed to load flowchart:', error);
@@ -332,11 +378,23 @@ const FlowEditor: React.FC = () => {
   }), []);
 
   const onNodesChange = useCallback(
-    (changes: NodeChange[]) => setNodes((nds) => applyNodeChanges(changes, nds)),
+    (changes: NodeChange[]) => {
+      setNodes((nds) => {
+        const updatedNodes = applyNodeChanges(changes, nds);
+        setHasUnsavedChanges(true);
+        return updatedNodes;
+      });
+    },
     [setNodes]
   );
   const onEdgesChange = useCallback(
-    (changes: EdgeChange[]) => setEdges((eds) => applyEdgeChanges(changes, eds)),
+    (changes: EdgeChange[]) => {
+      setEdges((eds) => {
+        const updatedEdges = applyEdgeChanges(changes, eds);
+        setHasUnsavedChanges(true);
+        return updatedEdges;
+      });
+    },
     [setEdges]
   );
   const onConnect = useCallback(
@@ -355,9 +413,12 @@ const FlowEditor: React.FC = () => {
           stroke: '#B1B1B7', // Default stroke color
         },
       };
-      setEdges((eds) => addEdge(newEdge, eds));
+      setEdges((eds) => {
+        setHasUnsavedChanges(true);
+        return addEdge(newEdge, eds);
+      });
     },
-    [setEdges]
+    [setEdges, setHasUnsavedChanges]
   );
 
   // --- Edge Hover Handlers ---
@@ -419,8 +480,11 @@ const FlowEditor: React.FC = () => {
       position,
       data: nodeData,
     };
-    setNodes((nds) => nds.concat(newNode));
-  }, [setNodes, getId]); // Added getId dependency
+    setNodes((nds) => {
+      setHasUnsavedChanges(true);
+      return nds.concat(newNode);
+    });
+  }, [setNodes, getId, setHasUnsavedChanges]);
 
 
   const onDrop = useCallback(
