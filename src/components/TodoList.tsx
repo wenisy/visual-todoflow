@@ -3,24 +3,6 @@
 import React, { useMemo, useState, useEffect, useCallback } from 'react';
 import { Typography, Modal, Button, Checkbox } from 'antd';
 import { Node, Edge, useReactFlow } from 'reactflow';
-import {
-  DndContext,
-  closestCenter,
-  KeyboardSensor,
-  PointerSensor,
-  useSensor,
-  useSensors,
-  DragEndEvent,
-} from '@dnd-kit/core';
-import {
-  arrayMove,
-  SortableContext,
-  sortableKeyboardCoordinates,
-  verticalListSortingStrategy,
-  useSortable,
-} from '@dnd-kit/sortable';
-import { CSS } from '@dnd-kit/utilities';
-import { GripVertical } from 'lucide-react';
 
 const { Text } = Typography;
 
@@ -80,75 +62,6 @@ const getOrderedTasks = (nodes: Node[], edges: Edge[]): Node[] => {
     return sortedList;
 };
 
-// Sortable Item Component
-interface SortableItemProps {
-  id: string;
-  node: Node;
-  index: number;
-  order?: number;
-  onDelete: (node: Node) => void;
-  isCompleted: boolean; // Added
-  onToggleComplete: (id: string, completed: boolean) => void; // Added
-}
-function SortableItem({ id, node, index, onDelete, isCompleted, onToggleComplete }: SortableItemProps) { // Added props
-  const {
-    attributes,
-    listeners,
-    setNodeRef,
-    transform,
-    transition,
-    isDragging,
-  } = useSortable({ id });
-
-  const style: React.CSSProperties = {
-    transform: CSS.Transform.toString(transform),
-    transition,
-    cursor: 'grab',
-    opacity: isDragging ? 0.5 : 1,
-    display: 'flex',
-    alignItems: 'center',
-    padding: '8px 12px',
-    borderBottom: '1px solid #f0f0f0',
-    backgroundColor: isDragging ? '#e6f7ff' : '#fff',
-    justifyContent: 'space-between'
-  };
-
-  const displayContent = node.type === 'text' && node.data?.text
-    ? node.data.text
-    : node.data?.label || `Node ${node.id}`;
-
-  return (
-    <div ref={setNodeRef} style={style} {...attributes}>
-      <div style={{ display: 'flex', alignItems: 'center', flexGrow: 1 }}>
-        {/* Drag Handle */}
-        <span {...listeners} style={{ marginRight: '8px', cursor: 'grab', display: 'inline-flex', alignItems: 'center' }}>
-          <GripVertical size={16} />
-        </span>
-        {/* Checkbox */}
-        <Checkbox
-          checked={isCompleted}
-          onChange={(e) => onToggleComplete(id, e.target.checked)}
-          style={{ marginRight: '8px' }}
-          // Removed disabled={isCompleted} to allow unchecking
-        />
-        {/* Task Text */}
-        <Text delete={isCompleted} style={{ flexGrow: 1, textDecoration: isCompleted ? 'line-through' : 'none' }}>
-          {index + 1}. {displayContent}
-        </Text>
-      </div>
-      <div>
-        <Button
-          type="text"
-          size="small"
-          danger
-          onClick={() => onDelete(node)}
-        >
-          删除
-        </Button>
-      </div>
-    </div>
-  );
-}
 
 const TodoList: React.FC<TodoListProps> = ({ nodes, edges }) => {
   const { setEdges, setNodes } = useReactFlow();
@@ -209,24 +122,6 @@ const TodoList: React.FC<TodoListProps> = ({ nodes, edges }) => {
     );
   }, [edges, nodes]);
 
-  const sensors = useSensors(
-    useSensor(PointerSensor),
-    useSensor(KeyboardSensor, {
-      coordinateGetter: sortableKeyboardCoordinates,
-    })
-  );
-
-  const handleDragEnd = (event: DragEndEvent) => {
-    const { active, over } = event;
-
-    if (over && active.id !== over.id) {
-      setTaskOrder((items) => {
-        const oldIndex = items.indexOf(active.id as string);
-        const newIndex = items.indexOf(over.id as string);
-        return arrayMove(items, oldIndex, newIndex);
-      });
-    }
-  };
 
   // Handler for toggling task completion
   const handleToggleComplete = useCallback((id: string, completed: boolean) => {
@@ -284,29 +179,50 @@ const TodoList: React.FC<TodoListProps> = ({ nodes, edges }) => {
         {/* Sorted Tasks Section */}
         <div>
           <h3 style={{ marginBottom: '8px' }}>已排序任务</h3>
-          <DndContext
-            sensors={sensors}
-            collisionDetection={closestCenter}
-            onDragEnd={handleDragEnd}
-          >
-            <SortableContext
-              items={taskOrder}
-              strategy={verticalListSortingStrategy}
-            >
-              <div style={{ border: '1px solid #d9d9d9', borderRadius: '2px' }}>
+          <div style={{ border: '1px solid #d9d9d9', borderRadius: '2px' }}>
                 {taskOrder.map((nodeId, index) => {
-                  const node = nodeMap.get(nodeId); // Get node details using the ID
-                  if (!node) return null; // Handle cases where node might not be found
+                  const node = nodeMap.get(nodeId);
+                  if (!node) return null;
+                  const isCompleted = completedTasks.has(node.id);
+                  const displayContent = node.type === 'text' && node.data?.text
+                    ? node.data.text
+                    : node.data?.label || `Node ${node.id}`;
+
                   return (
-                    <SortableItem
+                    <div
                       key={node.id}
-                      id={node.id}
-                      node={node}
-                      index={index} // Use the index from the taskOrder map
-                      onDelete={() => setDeleteConfirm(node)}
-                      isCompleted={completedTasks.has(node.id)}
-                      onToggleComplete={handleToggleComplete}
-                    />
+                      style={{
+                        padding: '8px 12px',
+                        borderBottom: '1px solid #f0f0f0',
+                        backgroundColor: '#fff',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between'
+                      }}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'center', flexGrow: 1 }}>
+                        {/* Checkbox */}
+                        <Checkbox
+                          checked={isCompleted}
+                          onChange={(e) => handleToggleComplete(node.id, e.target.checked)}
+                          style={{ marginRight: '8px' }}
+                        />
+                        {/* Task Text */}
+                        <Text delete={isCompleted} style={{ flexGrow: 1, textDecoration: isCompleted ? 'line-through' : 'none' }}>
+                          {index + 1}. {displayContent}
+                        </Text>
+                      </div>
+                      <div>
+                        <Button
+                          type="text"
+                          size="small"
+                          danger
+                          onClick={() => setDeleteConfirm(node)}
+                        >
+                          删除
+                        </Button>
+                      </div>
+                    </div>
                   );
                 })}
                 {taskOrder.length === 0 && (
@@ -314,10 +230,8 @@ const TodoList: React.FC<TodoListProps> = ({ nodes, edges }) => {
                     通过连线来对任务进行排序
                   </div>
                 )}
-              </div>
-            </SortableContext>
-          </DndContext>
-        </div>
+              </div> {/* Closing div for the sorted list container */}
+        </div> {/* Closing div for the sorted tasks section */}
 
         {/* Unsorted Tasks Section */}
         <div>
@@ -364,8 +278,8 @@ const TodoList: React.FC<TodoListProps> = ({ nodes, edges }) => {
                   </Button>
                 </div>
               </div>
-             ); // Added closing parenthesis for return
-            })} {/* Added closing curly brace for map callback */}
+             );
+            })}
             {unsortedTasks.length === 0 && (
               <div style={{ padding: '16px', color: '#888', textAlign: 'center' }}>
                 暂无待排序任务
