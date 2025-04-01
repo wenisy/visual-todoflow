@@ -91,8 +91,8 @@ const generateUuid = () => {
 const initialNodes: Node[] = [];
 const initialEdges: Edge[] = [];
 
+// Initialize ID counter
 let id = 1;
-const getId = () => `${id++}`;
 
 // --- Draggable Sidebar Item ---
 // ... (DraggableItem component remains the same)
@@ -237,8 +237,36 @@ const FlowEditor: React.FC = () => {
   }, []);
 
   // Function to add a node at a specific position
+  // ID generation function with collision prevention
+  const getId = useCallback(() => {
+    // Find the maximum numeric ID from existing nodes
+    const maxId = nodes.reduce((max: number, node: Node) => {
+      const numId = parseInt(node.id);
+      return !isNaN(numId) ? Math.max(max, numId) : max;
+    }, 0);
+    
+    // Set the counter to max + 1 if it's lower
+    if (id <= maxId) {
+      id = maxId + 1;
+    }
+    
+    return `${id++}`;
+  }, [nodes]);
+
   const addNode = useCallback((type: string, position: XYPosition) => {
-    let nodeData = {};
+    interface NodeData {
+      label: string;
+      text?: string;
+      imageUrl?: string;
+      fileName?: string;
+      fileUrl?: string;
+      url?: string;
+    }
+    
+    let nodeData: NodeData = {
+      label: `${type} node`
+    };
+    
     switch (type) { // Initialize data properties for each type
       case 'text': nodeData = { label: 'Text Input', text: '' }; break; // Add text: ''
       case 'image': nodeData = { label: 'Image Upload', imageUrl: undefined }; break; // Add imageUrl
@@ -254,7 +282,7 @@ const FlowEditor: React.FC = () => {
       data: nodeData,
     };
     setNodes((nds) => nds.concat(newNode));
-  }, [setNodes]); // Removed screenToFlowPosition dependency as position is passed directly
+  }, [setNodes, getId]); // Added getId dependency
 
 
   const onDrop = useCallback(
