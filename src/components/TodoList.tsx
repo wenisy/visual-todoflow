@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useMemo, useState, useEffect, useCallback } from 'react';
-import { List, Typography, Menu, Dropdown, Modal, Button, Input } from 'antd';
+import { List, Typography, Menu, Dropdown, Modal, Button, Input, Checkbox } from 'antd'; // Added Checkbox
 import { Node, Edge, useReactFlow, ReactFlowInstance } from 'reactflow';
 import {
   DndContext,
@@ -86,8 +86,10 @@ interface SortableItemProps {
   index: number;
   order?: number;
   onDelete: (node: Node) => void;
+  isCompleted: boolean; // Added
+  onToggleComplete: (id: string, completed: boolean) => void; // Added
 }
-function SortableItem({ id, node, index, onDelete }: SortableItemProps) {
+function SortableItem({ id, node, index, onDelete, isCompleted, onToggleComplete }: SortableItemProps) { // Added props
   const {
     attributes,
     listeners,
@@ -116,11 +118,20 @@ function SortableItem({ id, node, index, onDelete }: SortableItemProps) {
 
   return (
     <div ref={setNodeRef} style={style} {...attributes}>
-      <div style={{ display: 'flex', alignItems: 'center' }}>
-        <span {...listeners} style={{ marginRight: '10px', cursor: 'grab', display: 'inline-flex', alignItems: 'center' }}>
+      <div style={{ display: 'flex', alignItems: 'center', flexGrow: 1 }}>
+        {/* Drag Handle */}
+        <span {...listeners} style={{ marginRight: '8px', cursor: 'grab', display: 'inline-flex', alignItems: 'center' }}>
           <GripVertical size={16} />
         </span>
-        <Text>
+        {/* Checkbox */}
+        <Checkbox
+          checked={isCompleted}
+          onChange={(e) => onToggleComplete(id, e.target.checked)}
+          style={{ marginRight: '8px' }}
+          // Removed disabled={isCompleted} to allow unchecking
+        />
+        {/* Task Text */}
+        <Text delete={isCompleted} style={{ flexGrow: 1, textDecoration: isCompleted ? 'line-through' : 'none' }}>
           {index + 1}. {displayContent}
         </Text>
       </div>
@@ -139,8 +150,9 @@ function SortableItem({ id, node, index, onDelete }: SortableItemProps) {
 }
 
 const TodoList: React.FC<TodoListProps> = ({ nodes, edges }) => {
-  const { setEdges, setNodes } = useReactFlow();
+  const { setEdges, setNodes, getNode } = useReactFlow(); // Added getNode
   const [taskOrder, setTaskOrder] = useState<string[]>([]);
+  const [completedTasks, setCompletedTasks] = useState<Set<string>>(new Set()); // Added state for completed tasks
   const [deleteConfirm, setDeleteConfirm] = useState<Node | null>(null);
   const [contextMenu, setContextMenu] = useState<{
     visible: boolean;
@@ -170,7 +182,16 @@ const TodoList: React.FC<TodoListProps> = ({ nodes, edges }) => {
     if (orderChanged) {
       setTaskOrder(initialOrderedIds);
     }
-  }, [nodes, edges]);
+    // Initialize completedTasks based on node data if needed on initial load or node changes
+    const initialCompleted = new Set<string>();
+    nodes.forEach(node => {
+        if (node.data?.completed) {
+            initialCompleted.add(node.id);
+        }
+    });
+    setCompletedTasks(initialCompleted);
+
+  }, [nodes, edges]); // Removed taskOrder from dependency array to avoid loop
 
   const sensors = useSensors(
     useSensor(PointerSensor),
@@ -190,6 +211,45 @@ const TodoList: React.FC<TodoListProps> = ({ nodes, edges }) => {
       });
     }
   };
+
+  // Handler for toggling task completion
+  const handleToggleComplete = useCallback((id: string, completed: boolean) => {
+    setCompletedTasks(prev => {
+      const newSet = new Set(prev);
+      if (completed) {
+        newSet.add(id);
+      } else {
+        // This case might not be reachable if checkbox is disabled when completed,
+        // but included for completeness.
+        newSet.delete(id);
+      }
+      return newSet;
+    });
+
+    // Update the corresponding node in React Flow
+    setNodes(nds => nds.map(node => {
+      if (node.id === id) {
+        return {
+          ...node,
+          // Disable interaction for completed nodes
+          draggable: !completed,
+          selectable: !completed,
+          connectable: !completed,
+          deletable: !completed, // Prevent deletion via React Flow UI, keep list delete button
+          data: {
+            ...node.data,
+            completed: completed,
+          },
+          style: {
+            ...node.style,
+            opacity: completed ? 0.6 : 1, // Visual indication
+          }
+        };
+      }
+      return node;
+    }));
+  }, [setNodes]);
+
 
   const handleEdgeRemove = useCallback(() => {
     if (contextMenu.edge) {
@@ -268,6 +328,8 @@ const TodoList: React.FC<TodoListProps> = ({ nodes, edges }) => {
                     node={node}
                     index={index}
                     onDelete={(node) => setDeleteConfirm(node)}
+                    isCompleted={completedTasks.has(node.id)} // Pass completion status
+                    onToggleComplete={handleToggleComplete} // Pass handler
                   />
                 ))}
                 {sortedTasks.length === 0 && (
@@ -284,23 +346,36 @@ const TodoList: React.FC<TodoListProps> = ({ nodes, edges }) => {
         <div>
           <h3 style={{ marginBottom: '8px' }}>待排序任务</h3>
           <div style={{ border: '1px solid #d9d9d9', borderRadius: '2px' }}>
-            {unsortedTasks.map((node) => (
-              <div
-                key={node.id}
-                style={{
-                  padding: '8px 12px',
-                  borderBottom: '1px solid #f0f0f0',
-                  background: '#fff',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between'
-                }}
-              >
-                <Text>
-                  {node.type === 'text' && node.data?.text
-                    ? node.data.text
-                    : node.data?.label || `Node ${node.id}`}
-                </Text>
+            {unsortedTasks.map((node) => {
+              const isCompleted = completedTasks.has(node.id);
+              const displayContent = node.type === 'text' && node.data?.text
+                ? node.data.text
+                : node.data?.label || `Node ${node.id}`;
+
+              return (
+                <div
+                  key={node.id}
+                  style={{
+                    padding: '8px 12px',
+                    borderBottom: '1px solid #f0f0f0',
+                    background: '#fff',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between'
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', flexGrow: 1 }}>
+                    {/* Checkbox for unsorted tasks */}
+                    <Checkbox
+                      checked={isCompleted}
+                      onChange={(e) => handleToggleComplete(node.id, e.target.checked)}
+                      style={{ marginRight: '8px' }}
+                    />
+                    {/* Task Text for unsorted tasks */}
+                    <Text delete={isCompleted} style={{ flexGrow: 1, textDecoration: isCompleted ? 'line-through' : 'none' }}>
+                      {displayContent}
+                    </Text>
+                  </div>
                 <div>
                   <Button
                     type="text"
@@ -312,7 +387,8 @@ const TodoList: React.FC<TodoListProps> = ({ nodes, edges }) => {
                   </Button>
                 </div>
               </div>
-            ))}
+             ); // Added closing parenthesis for return
+            })} {/* Added closing curly brace for map callback */}
             {unsortedTasks.length === 0 && (
               <div style={{ padding: '16px', color: '#888', textAlign: 'center' }}>
                 暂无待排序任务
@@ -356,6 +432,12 @@ const TodoList: React.FC<TodoListProps> = ({ nodes, edges }) => {
                   edge.target !== deleteConfirm.id
               )
             );
+            // Also remove from completed tasks state if deleted
+            setCompletedTasks(prev => {
+               const newSet = new Set(prev);
+               newSet.delete(deleteConfirm.id);
+               return newSet;
+            });
             setDeleteConfirm(null);
           }
         }}
