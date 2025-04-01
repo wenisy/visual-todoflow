@@ -233,8 +233,9 @@ const FlowEditor: React.FC = () => {
   const onPaneContextMenu = useCallback(
     (event: MouseEvent) => {
       event.preventDefault(); // Prevent native context menu
+      // Set state immediately, let Dropdown handle positioning
       setMenu({
-        x: event.clientX,
+        x: event.clientX, // Store coords, might be useful later but not for positioning now
         y: event.clientY,
         show: true,
       });
@@ -288,8 +289,9 @@ const onNodeContextMenu = useCallback(
   (event: React.MouseEvent, node: Node) => {
     event.preventDefault(); // Prevent native context menu
     setMenu({ show: false, x: 0, y: 0 }); // Hide pane menu if open
+    // Set state immediately, let Dropdown handle positioning
     setNodeMenu({
-      x: event.clientX,
+      x: event.clientX, // Store coords
       y: event.clientY,
       show: true,
       nodeId: node.id,
@@ -444,11 +446,7 @@ const handleNodeMenuClick: MenuProps['onClick'] = useCallback(
             trigger={['contextMenu']}
             open={menu.show}
             onOpenChange={(visible) => !visible && setMenu({ show: false, x: 0, y: 0 })}
-            dropdownRender={(menuNode) => (
-              <div style={{ position: 'fixed', left: menu.x, top: menu.y, zIndex: 1000 }}>
-                {menuNode}
-              </div>
-            )}
+            // Remove dropdownRender to let Antd handle positioning
           >
             {/* Node Context Menu Dropdown (nested inside the pane one for positioning context, but triggered separately) */}
             <Dropdown
@@ -456,19 +454,18 @@ const handleNodeMenuClick: MenuProps['onClick'] = useCallback(
               trigger={['contextMenu']} // This trigger is handled by onNodeContextMenu preventing default
               open={nodeMenu.show}
               onOpenChange={(visible) => !visible && setNodeMenu({ show: false, x: 0, y: 0, nodeId: null })}
-              dropdownRender={(menuNode) => (
-                <div style={{ position: 'fixed', left: nodeMenu.x, top: nodeMenu.y, zIndex: 1050 }}> {/* Higher z-index */}
-                  {menuNode}
-                </div>
-              )}
+              // Remove dropdownRender to let Antd handle positioning
             >
               {/* This div captures the pane context menu trigger */}
               <div
                 style={{ width: '100%', height: '100%', position: 'relative' }}
+                // We need to ensure the pane context menu still triggers the outer Dropdown
+                // The inner Dropdown for nodes is triggered by onNodeContextMenu on the ReactFlow component
                 onContextMenu={(e) => {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  return false;
+                   // Allow event propagation for the outer dropdown if not clicking on a node/edge
+                   // ReactFlow's onPaneContextMenu will handle setting the state
+                   // We might not need this explicit handler here anymore if ReactFlow handles it.
+                   // Let's remove this explicit handler for now.
                 }}
               >
                 <ReactFlow
