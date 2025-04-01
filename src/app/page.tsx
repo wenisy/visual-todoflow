@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useCallback, useRef, DragEvent, useMemo, MouseEvent, useEffect } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation'; // Import useRouter and useSearchParams
 import { Layout, Button, Space, Dropdown, MenuProps, message, Modal, List, Input, App } from 'antd';
 import type { MenuInfo } from 'rc-menu/lib/interface'; // Import MenuInfo type
 import { SaveOutlined, FileTextOutlined, PictureOutlined, PaperClipOutlined, ShareAltOutlined, PlusOutlined, CopyOutlined, ScissorOutlined, DeleteOutlined, DisconnectOutlined } from '@ant-design/icons';
@@ -132,6 +133,8 @@ const DraggableItem: React.FC<DraggableItemProps> = ({ nodeType, label, icon }) 
 // --- Main Flow Component ---
 const FlowEditor: React.FC = () => {
   const { modal } = App.useApp();
+  const router = useRouter(); // Get router instance
+  const searchParams = useSearchParams(); // Get search params
   const reactFlowWrapper = useRef<HTMLDivElement>(null);
   const [nodes, setNodes] = useState<Node[]>(initialNodes);
   const [edges, setEdges] = useState<Edge[]>(initialEdges);
@@ -176,7 +179,8 @@ const FlowEditor: React.FC = () => {
       console.log('loadFlowchart completed');
       setIsLoading(false);
     }
-  }, [setNodes, setEdges, setCurrentTag]);
+  }, [setNodes, setEdges, setCurrentTag, setCurrentUuid]); // Added setCurrentUuid dependency
+
   const [isTagModalVisible, setIsTagModalVisible] = useState(false);
   const [tagInputValue, setTagInputValue] = useState('');
 
@@ -458,10 +462,42 @@ const FlowEditor: React.FC = () => {
     fetchFlowcharts();
   }, []);
 
-  // Update hasUnsavedChanges when nodes or edges change
+  // Effect to load flowchart based on URL parameter on initial load/param change
   useEffect(() => {
-    setHasUnsavedChanges(true);
-  }, [nodes, edges]);
+    const talkUuid = searchParams.get('talk');
+    // Only load if talkUuid exists and is different from the currently loaded UUID
+    if (talkUuid && talkUuid !== currentUuid) {
+      // Check for unsaved changes before automatically loading
+      if (hasUnsavedChanges) {
+        modal.confirm({
+          title: '未保存的更改',
+          content: '您有未保存的更改。是否放弃更改并加载链接中的流程图？',
+          okText: '加载',
+          cancelText: '取消',
+          onOk: () => loadFlowchart(talkUuid),
+          onCancel: () => {
+            // Optionally, remove the 'talk' param if the user cancels
+            router.push('/', { scroll: false });
+          }
+        });
+      } else {
+        loadFlowchart(talkUuid);
+      }
+    }
+  }, [searchParams, loadFlowchart, hasUnsavedChanges, modal, router, currentUuid]); // Add dependencies
+
+  // Update hasUnsavedChanges when nodes or edges change (excluding initial load from URL)
+  useEffect(() => {
+    // Check if nodes/edges are the initial empty arrays or if it's the result of a load operation
+    const isInitial = nodes === initialNodes && edges === initialEdges;
+    // const isLoadingFromUrl = !!searchParams.get('talk'); // Removed unused variable
+
+    // Only set unsaved changes if it's not the initial state and not immediately after loading from URL
+    // This prevents marking as unsaved right after loading
+    if (!isInitial && !isLoading) { // Check isLoading state
+       setHasUnsavedChanges(true);
+    }
+  }, [nodes, edges, searchParams, isLoading]); // Added isLoading dependency
 
   // Function to actually perform the save operation with a tag
   const confirmSave = async (tag: string) => {
@@ -627,16 +663,25 @@ const FlowEditor: React.FC = () => {
                             color: currentUuid === flowchart.uuid ? '#1677ff' : undefined
                           }}
                           onClick={() => {
-                            if (hasUnsavedChanges) {
+                            const newPath = `/?talk=${flowchart.uuid}`;
+                            const loadAction = () => {
+                              router.push(newPath, { scroll: false }); // Update URL first
+                              loadFlowchart(flowchart.uuid);
+                            };
+
+                            if (hasUnsavedChanges && currentUuid !== flowchart.uuid) { // Only ask if different flowchart and unsaved changes
                               modal.confirm({
                                 title: '未保存的更改',
                                 content: '当前的更改尚未保存，是否继续加载？',
                                 okText: '继续',
                                 cancelText: '取消',
-                                onOk: () => loadFlowchart(flowchart.uuid)
+                                onOk: loadAction // Execute load action on OK
                               });
+                            } else if (currentUuid !== flowchart.uuid) { // Load if different flowchart, no unsaved changes
+                              loadAction();
                             } else {
-                              loadFlowchart(flowchart.uuid);
+                              // If clicking the currently loaded flowchart, just ensure URL is correct
+                              router.push(newPath, { scroll: false });
                             }
                           }}
                         >
