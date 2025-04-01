@@ -17,10 +17,11 @@ export async function POST(request: Request) {
     }
 
     try {
-        const { nodes, edges, tag } = await request.json() as {
+        const { nodes, edges, tag, uuid } = await request.json() as {
             nodes: Node[],
             edges: Edge[],
-            tag: string
+            tag: string,
+            uuid: string
         };
 
         if (!nodes || !edges || !tag) {
@@ -33,9 +34,9 @@ export async function POST(request: Request) {
         const response = await notion.databases.query({
             database_id: databaseId,
             filter: {
-                property: "Tag",
+                property: "UUID",
                 rich_text: {
-                    equals: tag
+                    equals: uuid
                 }
             }
         });
@@ -66,10 +67,25 @@ export async function POST(request: Request) {
                         text: { content: tag }
                     }]
                 },
+                UUID: {
+                    rich_text: [{
+                        text: { content: uuid }
+                    }]
+                },
                 [DB_DATA_PROP]: {
                     rich_text: [{
                         text: { content: flowchartData }
                     }]
+                },
+                CreateDate: {
+                    date: {
+                        start: new Date().toISOString()
+                    }
+                },
+                UpdateDate: {
+                    date: {
+                        start: new Date().toISOString()
+                    }
                 }
             }
         });

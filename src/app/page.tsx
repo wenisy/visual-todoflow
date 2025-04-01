@@ -78,6 +78,15 @@ const layoutStyle: React.CSSProperties = {
 };
 
 
+// Helper function to generate UUID
+const generateUuid = () => {
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+    const r = Math.random() * 16 | 0;
+    const v = c === 'x' ? r : (r & 0x3 | 0x8);
+    return v.toString(16);
+  });
+};
+
 // --- Initial Data & ID Generation ---
 const initialNodes: Node[] = [];
 const initialEdges: Edge[] = [];
@@ -128,15 +137,18 @@ const FlowEditor: React.FC = () => {
   const [edges, setEdges] = useState<Edge[]>(initialEdges);
   const [reactFlowInstance, setReactFlowInstance] = useState<ReactFlowInstance | null>(null);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
-  const [tags, setTags] = useState<string[]>([]);
+  const [flowcharts, setFlowcharts] = useState<Array<{ tag: string; uuid: string }>>([]);
   const [isSaving, setIsSaving] = useState(false); // State for save button loading
   const [isLoading, setIsLoading] = useState(false); // State for load button loading
   const [hoveredEdgeId, setHoveredEdgeId] = useState<string | null>(null); // State for hovered edge
-  const [currentTag, setCurrentTag] = useState<string | null>(null); // State for current tag
+  const [currentTag, setCurrentTag] = useState<string>("未命名"); // State for current tag
+  const [currentUuid, setCurrentUuid] = useState<string>(generateUuid()); // Initialize with UUID for new canvas
 
   // Define loadFlowchart outside of onClick
-  const loadFlowchart = useCallback(async (tag: string) => {
-    console.log('loadFlowchart called for tag:', tag);
+  // Helper function to generate UUID
+
+  const loadFlowchart = useCallback(async (uuid: string) => {
+    console.log('loadFlowchart called for uuid:', uuid);
     setIsLoading(true);
     try {
       const response = await fetch('/api/notion/load', {
@@ -144,7 +156,7 @@ const FlowEditor: React.FC = () => {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ tag }),
+        body: JSON.stringify({ uuid }),
       });
 
       if (!response.ok) {
@@ -154,7 +166,8 @@ const FlowEditor: React.FC = () => {
       const data = await response.json();
       setNodes(data.nodes || []);
       setEdges(data.edges || []);
-      setCurrentTag(tag);
+      setCurrentTag(data.tag);
+      setCurrentUuid(data.uuid);
       setHasUnsavedChanges(false);
     } catch (error) {
       console.error('Failed to load flowchart:', error);
@@ -402,19 +415,19 @@ const FlowEditor: React.FC = () => {
 
   // Fetch tags when component mounts
   useEffect(() => {
-    const fetchTags = async () => {
+    const fetchFlowcharts = async () => {
       try {
         const response = await fetch('/api/notion/list-tags');
         const data = await response.json();
-        if (data.tags) {
-          setTags(data.tags);
+        if (data.flowcharts) {
+          setFlowcharts(data.flowcharts);
         }
       } catch (error) {
-        console.error('Failed to fetch tags:', error);
+        console.error('Failed to fetch flowcharts:', error);
         message.error('Failed to fetch saved flowcharts');
       }
     };
-    fetchTags();
+    fetchFlowcharts();
   }, []);
 
   // Update hasUnsavedChanges when nodes or edges change
@@ -444,6 +457,7 @@ const FlowEditor: React.FC = () => {
     message.loading({ content: `Saving with tag "${tag}"...`, key: 'save_notion', duration: 0 });
 
     try {
+      const uuid = currentUuid || generateUuid();
       const response = await fetch('/api/notion/save', {
         method: 'POST',
         headers: {
@@ -452,9 +466,15 @@ const FlowEditor: React.FC = () => {
         body: JSON.stringify({
           nodes: currentNodes,
           edges: currentEdges,
-          tag // Use the provided tag
+          tag, // Use the provided tag
+          uuid
         }),
       });
+      
+      // Update UUID if it was newly generated
+      if (!currentUuid) {
+        setCurrentUuid(uuid);
+      }
 
       const result = await response.json();
 
@@ -465,10 +485,10 @@ const FlowEditor: React.FC = () => {
       setHasUnsavedChanges(false);
 
       // Refresh tags list
-      const tagsResponse = await fetch('/api/notion/list-tags');
-      const tagsData = await tagsResponse.json();
-      if (tagsData.tags) {
-        setTags(tagsData.tags);
+      const flowchartsResponse = await fetch('/api/notion/list-tags');
+      const flowchartsData = await flowchartsResponse.json();
+      if (flowchartsData.flowcharts) {
+        setFlowcharts(flowchartsData.flowcharts);
       }
 
 
@@ -488,8 +508,8 @@ const FlowEditor: React.FC = () => {
       message.warning('Canvas is empty, nothing to save.');
       return;
     }
-    // Pre-fill with current date as default suggestion
-    setTagInputValue(new Date().toISOString().split('T')[0]);
+    // Use current tag as default value
+    setTagInputValue(currentTag);
     setIsTagModalVisible(true);
   };
 
@@ -498,7 +518,17 @@ const FlowEditor: React.FC = () => {
       <Layout style={layoutStyle}>
         <Header style={headerStyle}>
           <div style={{ fontSize: '1.5rem', fontWeight: 'bold' }}>Visual TodoFlow</div>
-          <div style={{ fontSize: '1.2rem', color: '#1677ff' }}>{currentTag}</div>
+          <Input
+            style={{ fontSize: '1.2rem', color: '#1677ff', width: '200px', textAlign: 'center' }}
+            value={currentTag || "未命名"}
+            onChange={(e) => setCurrentTag(e.target.value)}
+            onPressEnter={(e) => {
+              const newTag = e.currentTarget.value;
+              if (newTag) {
+                setCurrentTag(newTag);
+              }
+            }}
+          />
           <Space>
             <Button
               type="primary"
@@ -520,14 +550,16 @@ const FlowEditor: React.FC = () => {
                     onOk: () => {
                       setNodes([]);
                       setEdges([]);
-                      setCurrentTag(null);
+                      setCurrentTag("未命名");
+                      setCurrentUuid(generateUuid());
                       setHasUnsavedChanges(false);
                     }
                   });
                 } else {
                   setNodes([]);
                   setEdges([]);
-                  setCurrentTag(null);
+                  setCurrentTag("未命名");
+                  setCurrentUuid(generateUuid());
                 }
               }}
             >
@@ -554,17 +586,17 @@ const FlowEditor: React.FC = () => {
                   border: '1px solid #f0f0f0',
                   borderRadius: '4px'
                 }}>
-                  {tags.length > 0 ? (
+                  {flowcharts.length > 0 ? (
                     <List
                       size="small"
-                      dataSource={tags}
-                      renderItem={(tag: string) => (
+                      dataSource={flowcharts}
+                      renderItem={(flowchart) => (
                         <List.Item
                           style={{
                             padding: '8px 12px',
                             cursor: 'pointer',
-                            backgroundColor: currentTag === tag ? '#e6f4ff' : undefined,
-                            color: currentTag === tag ? '#1677ff' : undefined
+                            backgroundColor: currentUuid === flowchart.uuid ? '#e6f4ff' : undefined,
+                            color: currentUuid === flowchart.uuid ? '#1677ff' : undefined
                           }}
                           onClick={() => {
                             if (hasUnsavedChanges) {
@@ -573,14 +605,16 @@ const FlowEditor: React.FC = () => {
                                 content: '当前的更改尚未保存，是否继续加载？',
                                 okText: '继续',
                                 cancelText: '取消',
-                                onOk: () => loadFlowchart(tag)
+                                onOk: () => loadFlowchart(flowchart.uuid)
                               });
                             } else {
-                              loadFlowchart(tag);
+                              loadFlowchart(flowchart.uuid);
                             }
                           }}
                         >
-                          {isLoading && currentTag === tag ? `${tag} (loading...)` : tag}
+                          {isLoading && currentUuid === flowchart.uuid
+                            ? `${flowchart.tag} (loading...)`
+                            : flowchart.tag}
                         </List.Item>
                       )}
                     />

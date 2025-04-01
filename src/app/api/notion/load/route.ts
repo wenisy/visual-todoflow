@@ -17,19 +17,19 @@ export async function POST(request: Request) {
     }
 
     try {
-        const { tag } = await request.json();
-        console.log('Received tag:', tag);
+        const { uuid } = await request.json();
+        console.log('Received uuid:', uuid);
 
-        if (!tag) {
-            return NextResponse.json({ error: 'Tag is required' }, { status: 400 });
+        if (!uuid) {
+            return NextResponse.json({ error: 'UUID is required' }, { status: 400 });
         }
 
         const response = await notion.databases.query({
             database_id: databaseId,
             filter: {
-                property: "Tag",
+                property: "UUID",
                 rich_text: {
-                    equals: tag
+                    equals: uuid
                 }
             }
         });
@@ -42,7 +42,7 @@ export async function POST(request: Request) {
         const page = response.results[0] as PageObjectResponse;
         
         if (!page) {
-            return NextResponse.json({ error: 'No flowchart found with this tag' }, { status: 404 });
+            return NextResponse.json({ error: 'No flowchart found with this UUID' }, { status: 404 });
         }
 
         console.log('Page properties:', Object.keys(page.properties));
@@ -56,8 +56,19 @@ export async function POST(request: Request) {
             return NextResponse.json({ error: 'No flowchart data found' }, { status: 404 });
         }
 
+        // Get tag and dates from properties
+        const tagProp = page.properties['Tag'] as { type: string; rich_text: Array<{ plain_text: string }> };
+        const createDateProp = page.properties['CreateDate'] as { type: string; date: { start: string } };
+        const updateDateProp = page.properties['UpdateDate'] as { type: string; date: { start: string } };
+
         const data = JSON.parse(flowData.rich_text[0].plain_text);
-        return NextResponse.json(data);
+        return NextResponse.json({
+            ...data,
+            tag: tagProp.rich_text[0]?.plain_text,
+            uuid,
+            createDate: createDateProp.date?.start,
+            updateDate: updateDateProp.date?.start
+        });
 
     } catch (error) {
         console.error('Error loading flowchart from Notion:', error);

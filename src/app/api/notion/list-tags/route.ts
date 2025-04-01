@@ -24,19 +24,29 @@ export async function GET() {
             ]
         });
 
-        const tags = response.results
+        const flowcharts = response.results
             .filter((page): page is PageObjectResponse => 'properties' in page)
             .map(page => {
                 const tagProp = page.properties["Tag"];
-                if (tagProp?.type === 'rich_text' && tagProp.rich_text[0]) {
-                    return tagProp.rich_text[0].plain_text;
+                const uuidProp = page.properties["UUID"];
+                if (tagProp?.type === 'rich_text' &&
+                    uuidProp?.type === 'rich_text' &&
+                    tagProp.rich_text[0] &&
+                    uuidProp.rich_text[0]) {
+                    return {
+                        tag: tagProp.rich_text[0].plain_text,
+                        uuid: uuidProp.rich_text[0].plain_text
+                    };
                 }
                 return null;
             })
-            .filter((tag): tag is string => tag !== null)
-            .filter((tag, index, self) => self.indexOf(tag) === index); // Remove duplicates
+            .filter((item): item is { tag: string; uuid: string } => item !== null)
+            // Remove duplicates based on UUID
+            .filter((item, index, self) =>
+                index === self.findIndex((t) => t.uuid === item.uuid)
+            );
 
-        return NextResponse.json({ tags });
+        return NextResponse.json({ flowcharts });
 
     } catch (error) {
         console.error('Error fetching tags from Notion:', error);
