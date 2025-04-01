@@ -1,8 +1,8 @@
 'use client';
 
 import React, { useMemo, useState, useEffect, useCallback } from 'react';
-import { List, Typography, Menu, Dropdown, Modal, Button, Input, Checkbox } from 'antd'; // Added Checkbox
-import { Node, Edge, useReactFlow, ReactFlowInstance } from 'reactflow';
+import { Typography, Menu, Dropdown, Modal, Button, Checkbox } from 'antd';
+import { Node, Edge, useReactFlow } from 'reactflow';
 import {
   DndContext,
   closestCenter,
@@ -150,7 +150,7 @@ function SortableItem({ id, node, index, onDelete, isCompleted, onToggleComplete
 }
 
 const TodoList: React.FC<TodoListProps> = ({ nodes, edges }) => {
-  const { setEdges, setNodes, getNode } = useReactFlow(); // Added getNode
+  const { setEdges, setNodes } = useReactFlow();
   const [taskOrder, setTaskOrder] = useState<string[]>([]);
   const [completedTasks, setCompletedTasks] = useState<Set<string>>(new Set()); // Added state for completed tasks
   const [deleteConfirm, setDeleteConfirm] = useState<Node | null>(null);
@@ -258,18 +258,15 @@ const TodoList: React.FC<TodoListProps> = ({ nodes, edges }) => {
     }
   }, [setEdges, contextMenu.edge]);
 
-  const onEdgeContextMenu = useCallback(
-    (event: React.MouseEvent, edge: Edge) => {
-      event.preventDefault();
-      setContextMenu({
-        visible: true,
-        x: event.clientX,
-        y: event.clientY,
-        edge: edge,
-      });
-    },
-    []
-  );
+  const onEdgeContextMenu = (event: React.MouseEvent, edge: Edge) => {
+    event.preventDefault();
+    setContextMenu({
+      visible: true,
+      x: event.clientX,
+      y: event.clientY,
+      edge: edge,
+    });
+  };
 
   const menuOverlay = (
     <Menu
@@ -321,18 +318,22 @@ const TodoList: React.FC<TodoListProps> = ({ nodes, edges }) => {
               strategy={verticalListSortingStrategy}
             >
               <div style={{ border: '1px solid #d9d9d9', borderRadius: '2px' }}>
-                {sortedTasks.map((node, index) => (
-                  <SortableItem
-                    key={node.id}
-                    id={node.id}
-                    node={node}
-                    index={index}
-                    onDelete={(node) => setDeleteConfirm(node)}
-                    isCompleted={completedTasks.has(node.id)} // Pass completion status
-                    onToggleComplete={handleToggleComplete} // Pass handler
-                  />
-                ))}
-                {sortedTasks.length === 0 && (
+                {taskOrder.map((nodeId, index) => {
+                  const node = nodeMap.get(nodeId); // Get node details using the ID
+                  if (!node) return null; // Handle cases where node might not be found
+                  return (
+                    <SortableItem
+                      key={node.id}
+                      id={node.id}
+                      node={node}
+                      index={index} // Use the index from the taskOrder map
+                      onDelete={() => setDeleteConfirm(node)}
+                      isCompleted={completedTasks.has(node.id)}
+                      onToggleComplete={handleToggleComplete}
+                    />
+                  );
+                })}
+                {taskOrder.length === 0 && (
                   <div style={{ padding: '16px', color: '#888', textAlign: 'center' }}>
                     通过连线来对任务进行排序
                   </div>
