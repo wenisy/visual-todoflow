@@ -61,7 +61,9 @@ export async function POST(request: Request) {
         const createDateProp = page.properties['CreateDate'] as { type: string; date: { start: string } };
         const updateDateProp = page.properties['UpdateDate'] as { type: string; date: { start: string } };
 
-        const data = JSON.parse(flowData.rich_text[0].plain_text);
+        // Combine all rich_text parts to reconstruct the full JSON string
+        const fullJsonString = flowData.rich_text.map(rt => rt.plain_text).join('');
+        const data = JSON.parse(fullJsonString);
         return NextResponse.json({
             ...data,
             tag: tagProp.rich_text[0]?.plain_text,

@@ -59,6 +59,24 @@ export async function POST(request: Request) {
         const flowchartData = JSON.stringify({ nodes, edges });
         console.log('Flowchart data length:', flowchartData.length);
 
+        // Helper function to chunk string
+        const chunkString = (str: string, size: number): string[] => {
+            const numChunks = Math.ceil(str.length / size);
+            const chunks = new Array(numChunks);
+            for (let i = 0, o = 0; i < numChunks; ++i, o += size) {
+                chunks[i] = str.substring(o, o + size);
+            }
+            return chunks;
+        };
+
+        // Chunk the data (Notion limit is 2000 chars per rich_text object)
+        const dataChunks = chunkString(flowchartData, 1999); // Use 1999 for safety margin
+        const richTextData = dataChunks.map(chunk => ({
+            text: { content: chunk }
+        }));
+
+        console.log(`Split data into ${dataChunks.length} chunks.`);
+
         const result = await notion.pages.create({
             parent: { database_id: databaseId },
             properties: {
@@ -73,9 +91,7 @@ export async function POST(request: Request) {
                     }]
                 },
                 [DB_DATA_PROP]: {
-                    rich_text: [{
-                        text: { content: flowchartData }
-                    }]
+                    rich_text: richTextData // Use the chunked rich text array
                 },
                 CreateDate: {
                     date: {
