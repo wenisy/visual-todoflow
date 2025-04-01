@@ -1,6 +1,6 @@
-import React, { useMemo, useState, useEffect } from 'react';
+import React, { useMemo, useState, useEffect, useCallback } from 'react';
 import { List, Typography } from 'antd';
-import { Node, Edge, useReactFlow } from 'reactflow';
+import { Node, Edge, useReactFlow, ReactFlowInstance } from 'reactflow';
 import {
   DndContext,
   closestCenter,
@@ -85,10 +85,12 @@ const getOrderedTasks = (nodes: Node[], edges: Edge[]): Node[] => {
 interface SortableItemProps {
   id: string;
   node: Node;
-  index: number;
+  index: number; // Original index in the sorted list for display
+  order?: number; // Optional order number to pass down if needed (we might not need it here anymore)
 }
 
-function SortableItem({ id, node, index }: SortableItemProps) {
+// Accept the order prop, even if we don't use it directly in SortableItem itself
+function SortableItem({ id, node, index, order }: SortableItemProps) {
   const {
     attributes,
     listeners,
@@ -188,41 +190,17 @@ const TodoList: React.FC<TodoListProps> = ({ nodes, edges }) => {
   }, [taskOrder, nodeMap]);
 
 
-  // Separate tasks into connected (sorted) and unconnected (unsorted) groups
-  const { setNodes } = useReactFlow();
-
-  // Update nodes with order information and separate into sorted/unsorted
+  // Calculate sorted and unsorted tasks WITHOUT modifying node data
   const { sortedTasks, unsortedTasks } = useMemo(() => {
     const sortedIds = new Set(taskOrder);
-    
-    // Get nodes with order numbers for sorted tasks
-    const sorted = manuallyOrderedTasks.map((node: Node, index: number) => ({
-      ...node,
-      data: {
-        ...node.data,
-        order: index, // Add order number to node data
-      }
-    }));
-
-    // Get unsorted tasks and ensure they don't have order numbers
-    const unsorted = nodes.filter(node => !sortedIds.has(node.id)).map((node: Node) => ({
-      ...node,
-      data: {
-        ...node.data,
-        order: undefined, // Remove order number from unsorted nodes
-      }
-    }));
-
-    // Update the nodes in the main ReactFlow state
-    setNodes((prevNodes: Node[]) => {
-      const nodeMap = new Map(prevNodes.map(n => [n.id, n]));
-      sorted.forEach(n => nodeMap.set(n.id, n));
-      unsorted.forEach(n => nodeMap.set(n.id, n));
-      return Array.from(nodeMap.values());
-    });
-
+    // Find the nodes corresponding to the current manual order
+    const sorted = taskOrder
+      .map(id => nodeMap.get(id))
+      .filter((node): node is Node => node !== undefined);
+    // Find nodes not in the manual order
+    const unsorted = nodes.filter(node => !sortedIds.has(node.id));
     return { sortedTasks: sorted, unsortedTasks: unsorted };
-  }, [manuallyOrderedTasks, nodes, taskOrder, setNodes]);
+  }, [taskOrder, nodeMap, nodes]); // Use taskOrder and nodeMap
   // If no tasks at all, show empty message
   if (sortedTasks.length === 0 && unsortedTasks.length === 0) {
     return <div style={{ padding: '16px', color: '#888' }}>Add nodes to the canvas to create tasks.</div>;
@@ -243,8 +221,10 @@ const TodoList: React.FC<TodoListProps> = ({ nodes, edges }) => {
             strategy={verticalListSortingStrategy}
           >
             <div style={{ border: '1px solid #d9d9d9', borderRadius: '2px' }}>
+              {/* Pass the index directly as the order prop to SortableItem */}
               {sortedTasks.map((node, index) => (
-                <SortableItem key={node.id} id={node.id} node={node} index={index} />
+                // Pass the index as the 'order' prop
+                <SortableItem key={node.id} id={node.id} node={node} index={index} order={index} />
               ))}
               {sortedTasks.length === 0 && (
                 <div style={{ padding: '16px', color: '#888', textAlign: 'center' }}>
@@ -271,7 +251,12 @@ const TodoList: React.FC<TodoListProps> = ({ nodes, edges }) => {
                 alignItems: 'center',
               }}
             >
-              <div>{node.data?.label || `Node ${node.id}`}</div>
+              {/* Display content for unsorted items */}
+              <Text>
+                {node.type === 'text' && node.data?.text
+                  ? node.data.text
+                  : node.data?.label || `Node ${node.id}`}
+              </Text>
             </div>
           ))}
           {unsortedTasks.length === 0 && (

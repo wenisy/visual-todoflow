@@ -1,4 +1,4 @@
-import React, { memo, useState, useEffect, useCallback } from 'react';
+import React, { memo, useState, useEffect, useCallback, useMemo } from 'react';
 import { Handle, Position, NodeProps, useReactFlow, useStoreApi, Edge } from 'reactflow';
 import { Input, Dropdown } from 'antd';
 import type { MenuProps } from 'antd';
@@ -40,10 +40,12 @@ const handleStyle: React.CSSProperties = {
 interface TextNodeData {
   label: string;
   text?: string;
-  order?: number;
+  // No longer need order in data
 }
 
-interface TextNodeProps extends NodeProps<TextNodeData> {}
+interface TextNodeProps extends NodeProps<TextNodeData> {
+  order?: number; // Accept order as a direct prop
+}
 
 // Badge style for order number
 const orderBadgeStyle: React.CSSProperties = {
@@ -64,11 +66,26 @@ const orderBadgeStyle: React.CSSProperties = {
   boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
 };
 
-const TextNode = memo(({ id, data, selected }: TextNodeProps) => {
+// Destructure the order prop here
+const TextNode = memo(({ id, data, selected, order }: TextNodeProps) => {
   const [isEditing, setIsEditing] = useState(false);
   const [nodeText, setNodeText] = useState(data.text || '');
   const { setNodes, setEdges } = useReactFlow();
   const store = useStoreApi();
+
+  // Memoize menu items to prevent unnecessary re-renders
+  const menuItems = useMemo(() => {
+    const edges = store.getState().edges;
+    return edges
+      .filter((edge: Edge) => edge.source === id || edge.target === id)
+      .map((edge: Edge) => ({
+        key: edge.id,
+        label: `删除连线 ${edge.source} → ${edge.target}`,
+        onClick: () => {
+          setEdges(edges => edges.filter(e => e.id !== edge.id));
+        }
+      }));
+  }, [id, store, setEdges]);
 
   useEffect(() => {
     setNodeText(data.text || '');
@@ -105,22 +122,19 @@ const TextNode = memo(({ id, data, selected }: TextNodeProps) => {
     }
   };
 
-  const menuItems = store.getState().edges
-    .filter((edge: Edge) => edge.source === id || edge.target === id)
-    .map((edge: Edge) => ({
-      key: edge.id,
-      label: `删除连线 ${edge.source} → ${edge.target}`,
-      onClick: () => {
-        setEdges(edges => edges.filter(e => e.id !== edge.id));
-      }
-    }));
 
   return (
-    <Dropdown menu={{ items: menuItems }} trigger={['contextMenu']}>
+    <Dropdown
+      menu={{ items: menuItems }}
+      trigger={['contextMenu']}
+      mouseEnterDelay={0.1}
+      mouseLeaveDelay={0.1}
+    >
       <div style={{...nodeStyle, position: 'relative'}} onDoubleClick={handleDoubleClick}>
-        {typeof data.order === 'number' && (
+        {/* Display order based on the passed prop */}
+        {order !== undefined && (
           <div style={orderBadgeStyle}>
-            {data.order + 1}
+            {order + 1}
           </div>
         )}
         <Handle type="target" position={Position.Top} id="top-target" style={handleStyle} />
