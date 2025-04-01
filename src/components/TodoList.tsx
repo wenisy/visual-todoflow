@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useMemo, useState, useEffect, useCallback } from 'react';
-import { List, Typography, Menu, Dropdown } from 'antd';
+import { List, Typography, Menu, Dropdown, Modal, Button, Input } from 'antd';
 import { Node, Edge, useReactFlow, ReactFlowInstance } from 'reactflow';
 import {
   DndContext,
@@ -85,9 +85,10 @@ interface SortableItemProps {
   node: Node;
   index: number;
   order?: number;
+  onEdit: (node: Node) => void;
+  onDelete: (node: Node) => void;
 }
-
-function SortableItem({ id, node, index }: SortableItemProps) {
+function SortableItem({ id, node, index, onEdit, onDelete }: SortableItemProps) {
   const {
     attributes,
     listeners,
@@ -107,6 +108,7 @@ function SortableItem({ id, node, index }: SortableItemProps) {
     padding: '8px 12px',
     borderBottom: '1px solid #f0f0f0',
     backgroundColor: isDragging ? '#e6f7ff' : '#fff',
+    justifyContent: 'space-between'
   };
 
   const displayContent = node.type === 'text' && node.data?.text
@@ -115,19 +117,41 @@ function SortableItem({ id, node, index }: SortableItemProps) {
 
   return (
     <div ref={setNodeRef} style={style} {...attributes}>
-      <span {...listeners} style={{ marginRight: '10px', cursor: 'grab', display: 'inline-flex', alignItems: 'center' }}>
-        <GripVertical size={16} />
-      </span>
-      <Text>
-        {index + 1}. {displayContent}
-      </Text>
+      <div style={{ display: 'flex', alignItems: 'center' }}>
+        <span {...listeners} style={{ marginRight: '10px', cursor: 'grab', display: 'inline-flex', alignItems: 'center' }}>
+          <GripVertical size={16} />
+        </span>
+        <Text>
+          {index + 1}. {displayContent}
+        </Text>
+      </div>
+      <div>
+        <Button
+          type="text"
+          size="small"
+          onClick={() => onEdit(node)}
+        >
+          编辑
+        </Button>
+        <Button
+          type="text"
+          size="small"
+          danger
+          onClick={() => onDelete(node)}
+        >
+          删除
+        </Button>
+      </div>
     </div>
   );
 }
 
 const TodoList: React.FC<TodoListProps> = ({ nodes, edges }) => {
-  const { setEdges } = useReactFlow();
+  const { setEdges, setNodes } = useReactFlow();
   const [taskOrder, setTaskOrder] = useState<string[]>([]);
+  const [editNode, setEditNode] = useState<Node | null>(null);
+  const [editText, setEditText] = useState('');
+  const [deleteConfirm, setDeleteConfirm] = useState<Node | null>(null);
   const [contextMenu, setContextMenu] = useState<{
     visible: boolean;
     x: number;
@@ -205,6 +229,11 @@ const TodoList: React.FC<TodoListProps> = ({ nodes, edges }) => {
           key: 'remove',
           label: '删除连接',
           onClick: handleEdgeRemove
+        },
+        {
+          key: 'cancel',
+          label: '取消',
+          onClick: () => setContextMenu((prev) => ({ ...prev, visible: false }))
         }
       ]}
     />
@@ -244,7 +273,17 @@ const TodoList: React.FC<TodoListProps> = ({ nodes, edges }) => {
             >
               <div style={{ border: '1px solid #d9d9d9', borderRadius: '2px' }}>
                 {sortedTasks.map((node, index) => (
-                  <SortableItem key={node.id} id={node.id} node={node} index={index} />
+                  <SortableItem
+                    key={node.id}
+                    id={node.id}
+                    node={node}
+                    index={index}
+                    onEdit={(node) => {
+                      setEditNode(node);
+                      setEditText(node.data?.text || node.data?.label || '');
+                    }}
+                    onDelete={(node) => setDeleteConfirm(node)}
+                  />
                 ))}
                 {sortedTasks.length === 0 && (
                   <div style={{ padding: '16px', color: '#888', textAlign: 'center' }}>
@@ -269,6 +308,7 @@ const TodoList: React.FC<TodoListProps> = ({ nodes, edges }) => {
                   background: '#fff',
                   display: 'flex',
                   alignItems: 'center',
+                  justifyContent: 'space-between'
                 }}
               >
                 <Text>
@@ -276,6 +316,26 @@ const TodoList: React.FC<TodoListProps> = ({ nodes, edges }) => {
                     ? node.data.text
                     : node.data?.label || `Node ${node.id}`}
                 </Text>
+                <div>
+                  <Button
+                    type="text"
+                    size="small"
+                    onClick={() => {
+                      setEditNode(node);
+                      setEditText(node.data?.text || node.data?.label || '');
+                    }}
+                  >
+                    编辑
+                  </Button>
+                  <Button
+                    type="text"
+                    size="small"
+                    danger
+                    onClick={() => setDeleteConfirm(node)}
+                  >
+                    删除
+                  </Button>
+                </div>
               </div>
             ))}
             {unsortedTasks.length === 0 && (
@@ -306,6 +366,56 @@ const TodoList: React.FC<TodoListProps> = ({ nodes, edges }) => {
           </Dropdown>
         </div>
       )}
+
+      {/* Edit Modal */}
+      <Modal
+        title="编辑任务"
+        open={!!editNode}
+        onOk={() => {
+          if (editNode) {
+            setNodes((nds) =>
+              nds.map((node) =>
+                node.id === editNode.id
+                  ? {
+                      ...node,
+                      data: { ...node.data, text: editText, label: editText },
+                    }
+                  : node
+              )
+            );
+            setEditNode(null);
+          }
+        }}
+        onCancel={() => setEditNode(null)}
+      >
+        <Input
+          value={editText}
+          onChange={(e) => setEditText(e.target.value)}
+          placeholder="输入任务内容"
+        />
+      </Modal>
+
+      {/* Delete Confirmation Modal */}
+      <Modal
+        title="确认删除"
+        open={!!deleteConfirm}
+        onOk={() => {
+          if (deleteConfirm) {
+            setNodes((nds) => nds.filter((node) => node.id !== deleteConfirm.id));
+            setEdges((eds) =>
+              eds.filter(
+                (edge) =>
+                  edge.source !== deleteConfirm.id &&
+                  edge.target !== deleteConfirm.id
+              )
+            );
+            setDeleteConfirm(null);
+          }
+        }}
+        onCancel={() => setDeleteConfirm(null)}
+      >
+        <p>确定要删除这个任务吗？这个操作无法撤销。</p>
+      </Modal>
     </>
   );
 };
