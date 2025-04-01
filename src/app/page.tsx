@@ -1,7 +1,7 @@
 'use client';
 
-import React, { useState, useCallback, useRef, DragEvent, useMemo, MouseEvent } from 'react';
-import { Layout, Button, Space, Dropdown, MenuProps, message } from 'antd';
+import React, { useState, useCallback, useRef, DragEvent, useMemo, MouseEvent, useEffect } from 'react';
+import { Layout, Button, Space, Dropdown, MenuProps, message, Modal, List, Input, App } from 'antd';
 import type { MenuInfo } from 'rc-menu/lib/interface'; // Import MenuInfo type
 import { SaveOutlined, FileTextOutlined, PictureOutlined, PaperClipOutlined, ShareAltOutlined, PlusOutlined, CopyOutlined, ScissorOutlined, DeleteOutlined, DisconnectOutlined } from '@ant-design/icons';
 import ReactFlow, {
@@ -17,7 +17,6 @@ import ReactFlow, {
   Connection,
   MiniMap,
   ReactFlowProvider,
-  useReactFlow,
   XYPosition,
   NodeTypes,
   ReactFlowInstance,
@@ -123,13 +122,50 @@ const DraggableItem: React.FC<DraggableItemProps> = ({ nodeType, label, icon }) 
 
 // --- Main Flow Component ---
 const FlowEditor: React.FC = () => {
+  const { modal } = App.useApp();
   const reactFlowWrapper = useRef<HTMLDivElement>(null);
   const [nodes, setNodes] = useState<Node[]>(initialNodes);
   const [edges, setEdges] = useState<Edge[]>(initialEdges);
   const [reactFlowInstance, setReactFlowInstance] = useState<ReactFlowInstance | null>(null);
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+  const [tags, setTags] = useState<string[]>([]);
   const [isSaving, setIsSaving] = useState(false); // State for save button loading
-  const { screenToFlowPosition } = useReactFlow();
+  const [isLoading, setIsLoading] = useState(false); // State for load button loading
   const [hoveredEdgeId, setHoveredEdgeId] = useState<string | null>(null); // State for hovered edge
+  const [currentTag, setCurrentTag] = useState<string | null>(null); // State for current tag
+
+  // Define loadFlowchart outside of onClick
+  const loadFlowchart = useCallback(async (tag: string) => {
+    console.log('loadFlowchart called for tag:', tag);
+    setIsLoading(true);
+    try {
+      const response = await fetch('/api/notion/load', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ tag }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to load flowchart');
+      }
+
+      const data = await response.json();
+      setNodes(data.nodes || []);
+      setEdges(data.edges || []);
+      setCurrentTag(tag);
+      setHasUnsavedChanges(false);
+    } catch (error) {
+      console.error('Failed to load flowchart:', error);
+      message.error('Failed to load flowchart');
+    } finally {
+      console.log('loadFlowchart completed');
+      setIsLoading(false);
+    }
+  }, [setNodes, setEdges, setCurrentTag]);
+  const [isTagModalVisible, setIsTagModalVisible] = useState(false);
+  const [tagInputValue, setTagInputValue] = useState('');
 
   // State for pane context menu
   const [menu, setMenu] = useState<{ x: number; y: number; show: boolean }>({ x: 0, y: 0, show: false });
@@ -154,21 +190,21 @@ const FlowEditor: React.FC = () => {
   );
   const onConnect = useCallback(
     (connection: Connection) => {
-        // Add standard arrowhead to new connections
-        const newEdge = {
-            ...connection,
-            markerEnd: {
-                type: MarkerType.ArrowClosed,
-                width: 20,
-                height: 20,
-                color: '#B1B1B7', // Default arrow color
-            },
-            style: {
-                strokeWidth: 2, // Default stroke width
-                stroke: '#B1B1B7', // Default stroke color
-            },
-        };
-        setEdges((eds) => addEdge(newEdge, eds));
+      // Add standard arrowhead to new connections
+      const newEdge = {
+        ...connection,
+        markerEnd: {
+          type: MarkerType.ArrowClosed,
+          width: 20,
+          height: 20,
+          color: '#B1B1B7', // Default arrow color
+        },
+        style: {
+          strokeWidth: 2, // Default stroke width
+          stroke: '#B1B1B7', // Default stroke color
+        },
+      };
+      setEdges((eds) => addEdge(newEdge, eds));
     },
     [setEdges]
   );
@@ -190,21 +226,21 @@ const FlowEditor: React.FC = () => {
   // Function to add a node at a specific position
   const addNode = useCallback((type: string, position: XYPosition) => {
     let nodeData = {};
-      switch (type) { // Initialize data properties for each type
-        case 'text': nodeData = { label: 'Text Input', text: '' }; break; // Add text: ''
-        case 'image': nodeData = { label: 'Image Upload', imageUrl: undefined }; break; // Add imageUrl
-        case 'attachment': nodeData = { label: 'File Attachment', fileName: undefined, fileUrl: undefined }; break; // Add fileName/fileUrl
-        case 'social': nodeData = { label: 'Social Post Link', url: '' }; break; // Add url
-        default: nodeData = { label: `${type} node` };
-      }
+    switch (type) { // Initialize data properties for each type
+      case 'text': nodeData = { label: 'Text Input', text: '' }; break; // Add text: ''
+      case 'image': nodeData = { label: 'Image Upload', imageUrl: undefined }; break; // Add imageUrl
+      case 'attachment': nodeData = { label: 'File Attachment', fileName: undefined, fileUrl: undefined }; break; // Add fileName/fileUrl
+      case 'social': nodeData = { label: 'Social Post Link', url: '' }; break; // Add url
+      default: nodeData = { label: `${type} node` };
+    }
 
-      const newNode: Node = {
-        id: getId(),
-        type,
-        position,
-        data: nodeData,
-      };
-      setNodes((nds) => nds.concat(newNode));
+    const newNode: Node = {
+      id: getId(),
+      type,
+      position,
+      data: nodeData,
+    };
+    setNodes((nds) => nds.concat(newNode));
   }, [setNodes]); // Removed screenToFlowPosition dependency as position is passed directly
 
 
@@ -243,108 +279,106 @@ const FlowEditor: React.FC = () => {
     [setMenu]
   );
 
-  // Hide menu on pane click
-  const onPaneClick = useCallback(() => setMenu({ show: false, x: 0, y: 0 }), [setMenu]);
-// Handle PANE context menu item clicks (Add Node, Paste)
-const handleMenuClick: MenuProps['onClick'] = useCallback(
-  (e: MenuInfo) => {
-    if (!reactFlowInstance) return;
+  // Handle PANE context menu item clicks (Add Node, Paste)
+  const handleMenuClick: MenuProps['onClick'] = useCallback(
+    (e: MenuInfo) => {
+      if (!reactFlowInstance) return;
 
-    const position = reactFlowInstance.screenToFlowPosition({
-      x: menu.x, // Use stored coordinates from pane menu state
-      y: menu.y,
-    });
+      const position = reactFlowInstance.screenToFlowPosition({
+        x: menu.x, // Use stored coordinates from pane menu state
+        y: menu.y,
+      });
 
-    if (e.key === 'paste') {
-      if (clipboard.node) {
-        // Create a new node from the clipboard data at the clicked position
-        const newNode: Node = {
-          ...clipboard.node,
-          id: getId(), // Generate a new ID
-          position, // Place it where the user right-clicked
-          selected: false, // Ensure it's not selected initially
-        };
-        setNodes((nds) => nds.concat(newNode));
+      if (e.key === 'paste') {
+        if (clipboard.node) {
+          // Create a new node from the clipboard data at the clicked position
+          const newNode: Node = {
+            ...clipboard.node,
+            id: getId(), // Generate a new ID
+            position, // Place it where the user right-clicked
+            selected: false, // Ensure it's not selected initially
+          };
+          setNodes((nds) => nds.concat(newNode));
 
-        // If it was a 'cut' operation, clear the clipboard
-        if (clipboard.type === 'cut') {
-          setClipboard({ node: null, type: null });
+          // If it was a 'cut' operation, clear the clipboard
+          if (clipboard.type === 'cut') {
+            setClipboard({ node: null, type: null });
+          }
+        } else {
+          message.info('Clipboard is empty.');
         }
       } else {
-        message.info('Clipboard is empty.');
+        // Add a new node based on the key (text, image, etc.)
+        addNode(e.key, position);
       }
-    } else {
-      // Add a new node based on the key (text, image, etc.)
-      addNode(e.key, position);
-    }
 
-    setMenu({ show: false, x: 0, y: 0 }); // Hide pane menu
-  },
-  [addNode, menu.x, menu.y, reactFlowInstance, clipboard, setNodes, setClipboard] // Added clipboard dependencies
-);
+      setMenu({ show: false, x: 0, y: 0 }); // Hide pane menu
+    },
+    [addNode, menu.x, menu.y, reactFlowInstance, clipboard, setNodes, setClipboard] // Added clipboard dependencies
+  );
 
 
-// --- Node Context Menu Logic ---
-const onNodeContextMenu = useCallback(
-  (event: React.MouseEvent, node: Node) => {
-    event.preventDefault(); // Prevent native context menu
-    setMenu({ show: false, x: 0, y: 0 }); // Hide pane menu if open
-    // Set state immediately, let Dropdown handle positioning
-    setNodeMenu({
-      x: event.clientX, // Store coords
-      y: event.clientY,
-      show: true,
-      nodeId: node.id,
-    });
-  },
-  [setNodeMenu, setMenu]
-);
+  // --- Node Context Menu Logic ---
+  const onNodeContextMenu = useCallback(
+    (event: React.MouseEvent, node: Node) => {
+      event.preventDefault(); // Prevent native context menu
+      setMenu({ show: false, x: 0, y: 0 }); // Hide pane menu if open
+      // Set state immediately, let Dropdown handle positioning
+      setNodeMenu({
+        x: event.clientX, // Store coords
+        y: event.clientY,
+        show: true,
+        nodeId: node.id,
+      });
+    },
+    [setNodeMenu, setMenu]
+  );
 
-// Hide node menu on pane click or drag
-const onPaneClickOrDrag = useCallback(() => {
+  // Hide node menu on pane click or drag
+  const onPaneClickOrDrag = useCallback(() => {
     setMenu({ show: false, x: 0, y: 0 });
     setNodeMenu({ show: false, x: 0, y: 0, nodeId: null });
-}, [setMenu, setNodeMenu]);
+  }, [setMenu, setNodeMenu]);
 
 
-// Handle NODE context menu item clicks (Copy, Cut, Delete)
-const handleNodeMenuClick: MenuProps['onClick'] = useCallback(
-  (e: MenuInfo) => {
-    const targetNodeId = nodeMenu.nodeId;
-    if (!targetNodeId) return;
+  // Handle NODE context menu item clicks (Copy, Cut, Delete)
+  const handleNodeMenuClick: MenuProps['onClick'] = useCallback(
+    (e: MenuInfo) => {
+      const targetNodeId = nodeMenu.nodeId;
+      if (!targetNodeId) return;
 
-    const targetNode = nodes.find(n => n.id === targetNodeId);
-    if (!targetNode) return;
+      const targetNode = nodes.find(n => n.id === targetNodeId);
+      if (!targetNode) return;
 
-    switch (e.key) {
-      case 'copy':
-        setClipboard({ node: { ...targetNode }, type: 'copy' }); // Store a copy
-        message.success(`Node "${targetNode.data.label || targetNode.id}" copied.`);
-        break;
-      case 'cut':
-        setClipboard({ node: { ...targetNode }, type: 'cut' }); // Store a copy for pasting
-        // Remove the node and connected edges
-        setNodes((nds) => nds.filter((n) => n.id !== targetNodeId));
-        setEdges((eds) => eds.filter((edge) => edge.source !== targetNodeId && edge.target !== targetNodeId));
-        message.success(`Node "${targetNode.data.label || targetNode.id}" cut.`);
-        break;
-      case 'break-sort':
-        // Remove all edges connected to the node, making it an unsorted task
-        setEdges((eds) => eds.filter((edge) => edge.source !== targetNodeId && edge.target !== targetNodeId));
-        message.success(`Node "${targetNode.data.label || targetNode.id}" moved to unsorted tasks.`);
-        break;
-      case 'delete':
-        // Remove the node and connected edges
-        setNodes((nds) => nds.filter((n) => n.id !== targetNodeId));
-        setEdges((eds) => eds.filter((edge) => edge.source !== targetNodeId && edge.target !== targetNodeId));
-        message.success(`Node "${targetNode.data.label || targetNode.id}" deleted.`);
-        break;
-    }
+      switch (e.key) {
+        case 'copy':
+          setClipboard({ node: { ...targetNode }, type: 'copy' }); // Store a copy
+          message.success(`Node "${targetNode.data.label || targetNode.id}" copied.`);
+          break;
+        case 'cut':
+          setClipboard({ node: { ...targetNode }, type: 'cut' }); // Store a copy for pasting
+          // Remove the node and connected edges
+          setNodes((nds) => nds.filter((n) => n.id !== targetNodeId));
+          setEdges((eds) => eds.filter((edge) => edge.source !== targetNodeId && edge.target !== targetNodeId));
+          message.success(`Node "${targetNode.data.label || targetNode.id}" cut.`);
+          break;
+        case 'break-sort':
+          // Remove all edges connected to the node, making it an unsorted task
+          setEdges((eds) => eds.filter((edge) => edge.source !== targetNodeId && edge.target !== targetNodeId));
+          message.success(`Node "${targetNode.data.label || targetNode.id}" moved to unsorted tasks.`);
+          break;
+        case 'delete':
+          // Remove the node and connected edges
+          setNodes((nds) => nds.filter((n) => n.id !== targetNodeId));
+          setEdges((eds) => eds.filter((edge) => edge.source !== targetNodeId && edge.target !== targetNodeId));
+          message.success(`Node "${targetNode.data.label || targetNode.id}" deleted.`);
+          break;
+      }
 
-    setNodeMenu({ show: false, x: 0, y: 0, nodeId: null }); // Hide node menu
-  },
-  [nodeMenu.nodeId, nodes, setNodes, setEdges, setClipboard] // Added dependencies
-);
+      setNodeMenu({ show: false, x: 0, y: 0, nodeId: null }); // Hide node menu
+    },
+    [nodeMenu.nodeId, nodes, setNodes, setEdges, setClipboard] // Added dependencies
+  );
 
   // Define PANE menu items
   const contextMenuItems: MenuProps['items'] = useMemo(() => [
@@ -366,126 +400,245 @@ const handleNodeMenuClick: MenuProps['onClick'] = useCallback(
   ];
 
 
-  const handleSave = async () => {
-    // Check if reactFlowInstance is available before accessing nodes/edges from it
-    // Although we use state variables nodes/edges here, it's good practice if you were using instance methods
-    if (!reactFlowInstance) {
-        message.error('Flow instance not ready.');
-        return;
-    }
+  // Fetch tags when component mounts
+  useEffect(() => {
+    const fetchTags = async () => {
+      try {
+        const response = await fetch('/api/notion/list-tags');
+        const data = await response.json();
+        if (data.tags) {
+          setTags(data.tags);
+        }
+      } catch (error) {
+        console.error('Failed to fetch tags:', error);
+        message.error('Failed to fetch saved flowcharts');
+      }
+    };
+    fetchTags();
+  }, []);
 
-    // Get current nodes and edges from state
+  // Update hasUnsavedChanges when nodes or edges change
+  useEffect(() => {
+    setHasUnsavedChanges(true);
+  }, [nodes, edges]);
+
+  // Function to actually perform the save operation with a tag
+  const confirmSave = async (tag: string) => {
+    if (!tag) {
+      message.error('Tag name cannot be empty.');
+      return;
+    }
+    if (!reactFlowInstance) {
+      message.error('Flow instance not ready.');
+      return;
+    }
     const currentNodes = nodes;
     const currentEdges = edges;
-
-
     if (!currentNodes || currentNodes.length === 0) {
-        message.warning('Canvas is empty, nothing to save.');
-        return;
+      message.warning('Canvas is empty, nothing to save.');
+      return;
     }
+
     setIsSaving(true);
-    message.loading({ content: 'Saving to Notion...', key: 'save_notion', duration: 0 }); // Use duration 0 for indefinite loading
+    setIsTagModalVisible(false); // Close modal before saving
+    message.loading({ content: `Saving with tag "${tag}"...`, key: 'save_notion', duration: 0 });
 
     try {
-        const response = await fetch('/api/notion/save', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({ nodes: currentNodes, edges: currentEdges }), // Send current state
-        });
+      const response = await fetch('/api/notion/save', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          nodes: currentNodes,
+          edges: currentEdges,
+          tag // Use the provided tag
+        }),
+      });
 
-        const result = await response.json();
+      const result = await response.json();
 
-        if (!response.ok) {
-            throw new Error(result.error || `HTTP error! status: ${response.status}`);
-        }
+      if (!response.ok) {
+        throw new Error(result.error || `HTTP error! status: ${response.status}`);
+      }
+      message.success({ content: result.message || 'Saved successfully!', key: 'save_notion', duration: 3 }); // Duration 3s
+      setHasUnsavedChanges(false);
 
-        message.success({ content: result.message || 'Saved successfully!', key: 'save_notion', duration: 2 });
+      // Refresh tags list
+      const tagsResponse = await fetch('/api/notion/list-tags');
+      const tagsData = await tagsResponse.json();
+      if (tagsData.tags) {
+        setTags(tagsData.tags);
+      }
 
-    } catch (error: any) {
-        console.error('Failed to save:', error);
-        message.error({ content: `Save failed: ${error.message}`, key: 'save_notion', duration: 4 });
+
+    } catch (error) {
+      console.error('Failed to save:', error);
+      const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred';
+      message.error({ content: `Save failed: ${errorMessage}`, key: 'save_notion', duration: 3 }); // Duration 3s
     } finally {
-        setIsSaving(false);
+      setIsSaving(false);
+      setTagInputValue(''); // Clear input value after attempt
     }
   };
 
+  // Modified handleSave to just open the modal
+  const handleSave = () => {
+    if (!nodes || nodes.length === 0) {
+      message.warning('Canvas is empty, nothing to save.');
+      return;
+    }
+    // Pre-fill with current date as default suggestion
+    setTagInputValue(new Date().toISOString().split('T')[0]);
+    setIsTagModalVisible(true);
+  };
+
   return (
-    <Layout style={layoutStyle}>
-      <Header style={headerStyle}>
-        <div style={{ fontSize: '1.5rem', fontWeight: 'bold' }}>Visual TodoFlow</div>
-        <Button
-            type="primary"
-            icon={<SaveOutlined />}
-            onClick={handleSave}
-            loading={isSaving} // Ensure loading state is applied
-        >
-          Save
-        </Button>
-      </Header>
-      <Layout>
-        <Sider width={250} style={siderStyle}>
-           <div style={{ flexGrow: 1 }}>
-             <h3 style={{ marginBottom: '16px' }}>Components</h3>
-             <DraggableItem nodeType="text" label="Text" icon={<FileTextOutlined />} />
-             <DraggableItem nodeType="image" label="Image" icon={<PictureOutlined />} />
-             <DraggableItem nodeType="attachment" label="Attachment" icon={<PaperClipOutlined />} />
-             <DraggableItem nodeType="social" label="Social Post" icon={<ShareAltOutlined />} />
-           </div>
-           <div style={{ marginTop: 'auto', paddingTop: '16px', borderTop: '1px solid #f0f0f0', fontSize: '0.8rem', color: '#888' }}>
-             Drag components onto the canvas. Connect them to define the flow. Right-click canvas to add nodes.
-           </div>
-        </Sider>
-        {/* Main Content Area (Canvas) */}
-        <Content style={contentWrapperStyle} ref={reactFlowWrapper} >
-          {/* Context Menu Dropdown wrapping the canvas area */}
-          {/* Pane Context Menu Dropdown */}
-          <Dropdown
-            menu={{ items: contextMenuItems, onClick: handleMenuClick }}
-            trigger={['contextMenu']}
-            open={menu.show}
-            onOpenChange={(visible) => !visible && setMenu({ show: false, x: 0, y: 0 })}
-            // Remove dropdownRender to let Antd handle positioning
-          >
-            {/* Node Context Menu Dropdown (nested inside the pane one for positioning context, but triggered separately) */}
-            <Dropdown
-              menu={{ items: nodeContextMenuItems, onClick: handleNodeMenuClick }}
-              trigger={['contextMenu']} // This trigger is handled by onNodeContextMenu preventing default
-              open={nodeMenu.show}
-              onOpenChange={(visible) => !visible && setNodeMenu({ show: false, x: 0, y: 0, nodeId: null })}
-              // Remove dropdownRender to let Antd handle positioning
+    <> {/* Use Fragment to wrap Layout and Modal */}
+      <Layout style={layoutStyle}>
+        <Header style={headerStyle}>
+          <div style={{ fontSize: '1.5rem', fontWeight: 'bold' }}>Visual TodoFlow</div>
+          <div style={{ fontSize: '1.2rem', color: '#1677ff' }}>{currentTag}</div>
+          <Space>
+            <Button
+              type="primary"
+              icon={<SaveOutlined />}
+              onClick={handleSave}
+              loading={isSaving}
             >
-              {/* This div captures the pane context menu trigger */}
-              <div
-                style={{ width: '100%', height: '100%', position: 'relative' }}
+              Save
+            </Button>
+            <Button
+              icon={<PlusOutlined />}
+              onClick={() => {
+                if (hasUnsavedChanges) {
+                  modal.confirm({
+                    title: '未保存的更改',
+                    content: '当前的更改尚未保存，是否继续新建？',
+                    okText: '继续',
+                    cancelText: '取消',
+                    onOk: () => {
+                      setNodes([]);
+                      setEdges([]);
+                      setCurrentTag(null);
+                      setHasUnsavedChanges(false);
+                    }
+                  });
+                } else {
+                  setNodes([]);
+                  setEdges([]);
+                  setCurrentTag(null);
+                }
+              }}
+            >
+              新建
+            </Button>
+          </Space>
+        </Header>
+        <Layout>
+          <Sider width={250} style={siderStyle}>
+            <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+              <div>
+                <h3 style={{ marginBottom: '16px' }}>Components</h3>
+                <DraggableItem nodeType="text" label="Text" icon={<FileTextOutlined />} />
+                <DraggableItem nodeType="image" label="Image" icon={<PictureOutlined />} />
+                <DraggableItem nodeType="attachment" label="Attachment" icon={<PaperClipOutlined />} />
+                <DraggableItem nodeType="social" label="Social Post" icon={<ShareAltOutlined />} />
+              </div>
+
+              <div style={{ marginTop: '32px' }}>
+                <h3 style={{ marginBottom: '16px' }}>Saved Flowcharts</h3>
+                <div style={{
+                  maxHeight: '200px',
+                  overflowY: 'auto',
+                  border: '1px solid #f0f0f0',
+                  borderRadius: '4px'
+                }}>
+                  {tags.length > 0 ? (
+                    <List
+                      size="small"
+                      dataSource={tags}
+                      renderItem={(tag: string) => (
+                        <List.Item
+                          style={{
+                            padding: '8px 12px',
+                            cursor: 'pointer',
+                            backgroundColor: currentTag === tag ? '#e6f4ff' : undefined,
+                            color: currentTag === tag ? '#1677ff' : undefined
+                          }}
+                          onClick={() => {
+                            if (hasUnsavedChanges) {
+                              modal.confirm({
+                                title: '未保存的更改',
+                                content: '当前的更改尚未保存，是否继续加载？',
+                                okText: '继续',
+                                cancelText: '取消',
+                                onOk: () => loadFlowchart(tag)
+                              });
+                            } else {
+                              loadFlowchart(tag);
+                            }
+                          }}
+                        >
+                          {isLoading && currentTag === tag ? `${tag} (loading...)` : tag}
+                        </List.Item>
+                      )}
+                    />
+                  ) : (
+                    <div style={{ padding: '16px', color: '#888', textAlign: 'center' }}>
+                      No saved flowcharts
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+            <div style={{ marginTop: 'auto', paddingTop: '16px', borderTop: '1px solid #f0f0f0', fontSize: '0.8rem', color: '#888' }}>
+              Drag components onto the canvas. Connect them to define the flow. Right-click canvas to add nodes.
+            </div>
+          </Sider>
+          {/* Main Content Area (Canvas) */}
+          <Content style={contentWrapperStyle} ref={reactFlowWrapper} >
+            {/* Context Menu Dropdown wrapping the canvas area */}
+            {/* Pane Context Menu Dropdown */}
+            <Dropdown
+              menu={{ items: contextMenuItems, onClick: handleMenuClick }}
+              trigger={['contextMenu']}
+              open={menu.show}
+              onOpenChange={(visible) => !visible && setMenu({ show: false, x: 0, y: 0 })}
+            // Remove dropdownRender to let Antd handle positioning
+            >
+              {/* Node Context Menu Dropdown (nested inside the pane one for positioning context, but triggered separately) */}
+              <Dropdown
+                menu={{ items: nodeContextMenuItems, onClick: handleNodeMenuClick }}
+                trigger={['contextMenu']} // This trigger is handled by onNodeContextMenu preventing default
+                open={nodeMenu.show}
+                onOpenChange={(visible) => !visible && setNodeMenu({ show: false, x: 0, y: 0, nodeId: null })}
+              // Remove dropdownRender to let Antd handle positioning
+              >
+                {/* This div captures the pane context menu trigger */}
+                <div
+                  style={{ width: '100%', height: '100%', position: 'relative' }}
                 // We need to ensure the pane context menu still triggers the outer Dropdown
                 // The inner Dropdown for nodes is triggered by onNodeContextMenu on the ReactFlow component
-                onContextMenu={(e) => {
-                   // Allow event propagation for the outer dropdown if not clicking on a node/edge
-                   // ReactFlow's onPaneContextMenu will handle setting the state
-                   // We might not need this explicit handler here anymore if ReactFlow handles it.
-                   // Let's remove this explicit handler for now.
-                }}
-              >
-                <ReactFlow
+                >
+                  <ReactFlow
                     nodes={nodes}
                     // Dynamically adjust edge styles based on hover state
                     edges={edges.map(edge => {
-                        const isHovered = edge.id === hoveredEdgeId;
-                        const defaultMarker = { type: MarkerType.ArrowClosed, width: 20, height: 20, color: '#B1B1B7' };
-                        const highlightedMarker = { ...defaultMarker, color: '#1677ff' }; // Create highlighted version
+                      const isHovered = edge.id === hoveredEdgeId;
+                      const defaultMarker = { type: MarkerType.ArrowClosed, width: 20, height: 20, color: '#B1B1B7' };
+                      const highlightedMarker = { ...defaultMarker, color: '#1677ff' }; // Create highlighted version
 
-                        return {
-                            ...edge,
-                            style: {
-                                ...(edge.style || {}), // Ensure style object exists
-                                strokeWidth: isHovered ? 3 : 2,
-                                stroke: isHovered ? '#1677ff' : '#B1B1B7',
-                            },
-                            markerEnd: isHovered ? highlightedMarker : defaultMarker, // Assign the correct marker object
-                            // animated: isHovered, // Optional: make it animated only when hovered
-                        };
+                      return {
+                        ...edge,
+                        style: {
+                          ...(edge.style || {}), // Ensure style object exists
+                          strokeWidth: isHovered ? 3 : 2,
+                          stroke: isHovered ? '#1677ff' : '#B1B1B7',
+                        },
+                        markerEnd: isHovered ? highlightedMarker : defaultMarker, // Assign the correct marker object
+                        // animated: isHovered, // Optional: make it animated only when hovered
+                      };
                     })}
                     onNodesChange={onNodesChange}
                     onEdgesChange={onEdgesChange}
@@ -502,33 +655,57 @@ const handleNodeMenuClick: MenuProps['onClick'] = useCallback(
                     onInit={setReactFlowInstance}
                     fitView
                     style={{ width: '100%', height: '100%' }}
-                >
+                  >
                     <Controls />
                     <MiniMap />
                     <Background gap={12} size={1} />
-                </ReactFlow>
-              </div>
+                  </ReactFlow>
+                </div>
+              </Dropdown>
             </Dropdown>
-          </Dropdown>
-        </Content>
+          </Content>
 
-        {/* Right Sidebar for Todo List */}
-        <Sider width={300} style={rightSiderStyle} className="todo-list-sider"> {/* Added className for potential styling */}
+          {/* Right Sidebar for Todo List */}
+          <Sider width={300} style={rightSiderStyle} className="todo-list-sider"> {/* Added className for potential styling */}
             <h3 style={{ marginBottom: '16px' }}>Todo List (Order)</h3>
             {/* Render the TodoList component */}
             {/* <div>Generated list will appear here...</div> */}
             <TodoList nodes={nodes} edges={edges} />
-        </Sider>
+          </Sider>
+        </Layout>
+
+        {/* Tag Input Modal */}
+        <Modal
+          title="Enter Tag Name"
+          open={isTagModalVisible}
+          onOk={() => confirmSave(tagInputValue)}
+          onCancel={() => {
+            setIsTagModalVisible(false);
+            setTagInputValue(''); // Clear input on cancel
+          }}
+          confirmLoading={isSaving}
+          okText="Save"
+          cancelText="Cancel"
+        >
+          <Input
+            placeholder="Enter a tag name (e.g., project-alpha-v1)"
+            value={tagInputValue}
+            onChange={(e: React.ChangeEvent<HTMLInputElement>) => setTagInputValue(e.target.value)}
+            onPressEnter={() => confirmSave(tagInputValue)} // Allow saving with Enter key
+          />
+        </Modal>
       </Layout>
-    </Layout>
+    </> // Close Fragment
   );
 }
 
-// Wrap main export in ReactFlowProvider
+// Wrap main export in ReactFlowProvider and App for Modal context
 export default function Home() {
   return (
-    <ReactFlowProvider>
-      <FlowEditor />
-    </ReactFlowProvider>
+    <App>
+      <ReactFlowProvider>
+        <FlowEditor />
+      </ReactFlowProvider>
+    </App>
   );
 }
