@@ -98,27 +98,42 @@ let id = 1;
 const LOCAL_STORAGE_PREFIX = 'visual-todoflow:';
 
 const saveToLocalStorage = (uuid: string, data: { nodes: Node[], edges: Edge[], tag: string }) => {
- if (!uuid) return; // Don't save if UUID is missing
- try {
-   localStorage.setItem(`${LOCAL_STORAGE_PREFIX}${uuid}`, JSON.stringify(data));
-   // console.log(`Saved to LS: ${uuid}`);
- } catch (error) {
-   console.error("Failed to save to local storage:", error);
-   // Optionally, inform the user or implement more robust error handling
- }
+  if (!uuid) return; // Don't save if UUID is missing
+  try {
+    const dataToStore = {
+      ...data,
+      savedAt: Date.now() // Add timestamp
+    };
+    localStorage.setItem(`${LOCAL_STORAGE_PREFIX}${uuid}`, JSON.stringify(dataToStore));
+    // console.log(`Saved to LS: ${uuid}`);
+  } catch (error) {
+    console.error("Failed to save to local storage:", error);
+    // Optionally, inform the user or implement more robust error handling
+  }
 };
 
-const loadFromLocalStorage = (uuid: string): { nodes: Node[], edges: Edge[], tag: string } | null => {
- if (!uuid) return null;
- try {
-   const item = localStorage.getItem(`${LOCAL_STORAGE_PREFIX}${uuid}`);
-   // console.log(`Attempted load from LS: ${uuid}, Found: ${!!item}`);
-   return item ? JSON.parse(item) : null;
- } catch (error) {
-   console.error("Failed to load from local storage:", error);
-   localStorage.removeItem(`${LOCAL_STORAGE_PREFIX}${uuid}`); // Clear corrupted item
-   return null;
- }
+const loadFromLocalStorage = (uuid: string): { nodes: Node[], edges: Edge[], tag: string, savedAt?: number } | null => {
+  if (!uuid) return null;
+  try {
+    const item = localStorage.getItem(`${LOCAL_STORAGE_PREFIX}${uuid}`);
+    // console.log(`Attempted load from LS: ${uuid}, Found: ${!!item}`);
+    if (!item) return null;
+    const parsedData = JSON.parse(item);
+    // Basic check if it looks like our data (can be improved)
+    // Check for timestamp existence as part of validation now
+    if (parsedData && typeof parsedData === 'object' && ('nodes' in parsedData || 'edges' in parsedData) && 'savedAt' in parsedData) {
+       return parsedData;
+    }
+    // If data is invalid or old format without timestamp, treat as null and remove
+    console.warn("Invalid or old format data found in local storage for:", uuid);
+    localStorage.removeItem(`${LOCAL_STORAGE_PREFIX}${uuid}`);
+    return null;
+
+  } catch (error) {
+    console.error("Failed to load from local storage:", error);
+    localStorage.removeItem(`${LOCAL_STORAGE_PREFIX}${uuid}`); // Clear corrupted item
+    return null;
+  }
 };
 
 const clearFromLocalStorage = (uuid: string) => {
@@ -128,6 +143,56 @@ const clearFromLocalStorage = (uuid: string) => {
    // console.log(`Cleared from LS: ${uuid}`);
  } catch (error) {
    console.error("Failed to clear from local storage:", error);
+ }
+};
+
+// --- Local Storage Cleanup ---
+const CLEANUP_INTERVAL_MS = 7 * 24 * 60 * 60 * 1000; // 7 days in milliseconds
+
+const cleanupLocalStorage = () => {
+ const now = Date.now();
+ let itemsRemoved = 0;
+ try {
+   // Iterate safely over keys
+   const keysToRemove: string[] = [];
+   for (let i = 0; i < localStorage.length; i++) {
+     const key = localStorage.key(i);
+     if (key && key.startsWith(LOCAL_STORAGE_PREFIX)) {
+       const item = localStorage.getItem(key);
+       if (item) {
+         try {
+           const parsedData = JSON.parse(item);
+           // Check if it has a timestamp and if it's older than the interval
+           if (parsedData.savedAt && (now - parsedData.savedAt > CLEANUP_INTERVAL_MS)) {
+             keysToRemove.push(key);
+           } else if (!parsedData.savedAt) {
+              // Also remove items without a timestamp (old format)
+              console.log(`Removing old format LS item (no timestamp): ${key}`);
+              keysToRemove.push(key);
+           }
+         } catch (parseError) {
+           // If parsing fails, it might be corrupted, remove it
+           console.warn(`Removing potentially corrupted LS item: ${key}`, parseError);
+           keysToRemove.push(key);
+         }
+       } else {
+         // If key exists but item is null/undefined somehow, mark for removal
+         keysToRemove.push(key);
+       }
+     }
+   }
+
+   // Remove identified keys
+   keysToRemove.forEach(key => {
+      localStorage.removeItem(key);
+      itemsRemoved++;
+   });
+
+   if (itemsRemoved > 0) {
+      console.log(`Local storage cleanup removed ${itemsRemoved} old or invalid item(s).`);
+   }
+ } catch (error) {
+   console.error("Error during local storage cleanup:", error);
  }
 };
 
@@ -514,8 +579,9 @@ const FlowEditor: React.FC = () => {
   ];
 
 
-  // Fetch tags when component mounts
+  // Run on initial mount: Fetch saved list and cleanup local storage
   useEffect(() => {
+    // 1. Fetch list of saved flowcharts
     const fetchFlowcharts = async () => {
       try {
         const response = await fetch('/api/notion/list-tags');
@@ -529,7 +595,11 @@ const FlowEditor: React.FC = () => {
       }
     };
     fetchFlowcharts();
-  }, []); // Fetch list of saved flowcharts on mount
+
+    // 2. Run local storage cleanup
+    cleanupLocalStorage();
+
+  }, []); // Empty dependency array ensures this runs only once on mount
 
   // Effect for initial load logic (URL param or local storage for initial UUID)
   useEffect(() => {
