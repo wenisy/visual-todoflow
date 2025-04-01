@@ -85,10 +85,9 @@ interface SortableItemProps {
   node: Node;
   index: number;
   order?: number;
-  onEdit: (node: Node) => void;
   onDelete: (node: Node) => void;
 }
-function SortableItem({ id, node, index, onEdit, onDelete }: SortableItemProps) {
+function SortableItem({ id, node, index, onDelete }: SortableItemProps) {
   const {
     attributes,
     listeners,
@@ -129,13 +128,6 @@ function SortableItem({ id, node, index, onEdit, onDelete }: SortableItemProps) 
         <Button
           type="text"
           size="small"
-          onClick={() => onEdit(node)}
-        >
-          编辑
-        </Button>
-        <Button
-          type="text"
-          size="small"
           danger
           onClick={() => onDelete(node)}
         >
@@ -149,8 +141,6 @@ function SortableItem({ id, node, index, onEdit, onDelete }: SortableItemProps) 
 const TodoList: React.FC<TodoListProps> = ({ nodes, edges }) => {
   const { setEdges, setNodes } = useReactFlow();
   const [taskOrder, setTaskOrder] = useState<string[]>([]);
-  const [editNode, setEditNode] = useState<Node | null>(null);
-  const [editText, setEditText] = useState('');
   const [deleteConfirm, setDeleteConfirm] = useState<Node | null>(null);
   const [contextMenu, setContextMenu] = useState<{
     visible: boolean;
@@ -170,7 +160,6 @@ const TodoList: React.FC<TodoListProps> = ({ nodes, edges }) => {
       setTaskOrder([]);
       return;
     }
-
     const initialOrderedNodes = getOrderedTasks(nodes, edges);
     const initialOrderedIds = initialOrderedNodes.map(n => n.id);
 
@@ -278,10 +267,6 @@ const TodoList: React.FC<TodoListProps> = ({ nodes, edges }) => {
                     id={node.id}
                     node={node}
                     index={index}
-                    onEdit={(node) => {
-                      setEditNode(node);
-                      setEditText(node.data?.text || node.data?.label || '');
-                    }}
                     onDelete={(node) => setDeleteConfirm(node)}
                   />
                 ))}
@@ -317,16 +302,6 @@ const TodoList: React.FC<TodoListProps> = ({ nodes, edges }) => {
                     : node.data?.label || `Node ${node.id}`}
                 </Text>
                 <div>
-                  <Button
-                    type="text"
-                    size="small"
-                    onClick={() => {
-                      setEditNode(node);
-                      setEditText(node.data?.text || node.data?.label || '');
-                    }}
-                  >
-                    编辑
-                  </Button>
                   <Button
                     type="text"
                     size="small"
@@ -366,34 +341,6 @@ const TodoList: React.FC<TodoListProps> = ({ nodes, edges }) => {
           </Dropdown>
         </div>
       )}
-
-      {/* Edit Modal */}
-      <Modal
-        title="编辑任务"
-        open={!!editNode}
-        onOk={() => {
-          if (editNode) {
-            setNodes((nds) =>
-              nds.map((node) =>
-                node.id === editNode.id
-                  ? {
-                      ...node,
-                      data: { ...node.data, text: editText, label: editText },
-                    }
-                  : node
-              )
-            );
-            setEditNode(null);
-          }
-        }}
-        onCancel={() => setEditNode(null)}
-      >
-        <Input
-          value={editText}
-          onChange={(e) => setEditText(e.target.value)}
-          placeholder="输入任务内容"
-        />
-      </Modal>
 
       {/* Delete Confirmation Modal */}
       <Modal

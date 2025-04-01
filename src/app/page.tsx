@@ -3,7 +3,7 @@
 import React, { useState, useCallback, useRef, DragEvent, useMemo, MouseEvent } from 'react';
 import { Layout, Button, Space, Dropdown, MenuProps, message } from 'antd';
 import type { MenuInfo } from 'rc-menu/lib/interface'; // Import MenuInfo type
-import { SaveOutlined, FileTextOutlined, PictureOutlined, PaperClipOutlined, ShareAltOutlined, PlusOutlined } from '@ant-design/icons'; // Added PlusOutlined
+import { SaveOutlined, FileTextOutlined, PictureOutlined, PaperClipOutlined, ShareAltOutlined, PlusOutlined, CopyOutlined, ScissorOutlined, DeleteOutlined, DisconnectOutlined } from '@ant-design/icons';
 import ReactFlow, {
   Controls,
   Background,
@@ -326,6 +326,11 @@ const handleNodeMenuClick: MenuProps['onClick'] = useCallback(
         setEdges((eds) => eds.filter((edge) => edge.source !== targetNodeId && edge.target !== targetNodeId));
         message.success(`Node "${targetNode.data.label || targetNode.id}" cut.`);
         break;
+      case 'break-sort':
+        // Remove all edges connected to the node, making it an unsorted task
+        setEdges((eds) => eds.filter((edge) => edge.source !== targetNodeId && edge.target !== targetNodeId));
+        message.success(`Node "${targetNode.data.label || targetNode.id}" moved to unsorted tasks.`);
+        break;
       case 'delete':
         // Remove the node and connected edges
         setNodes((nds) => nds.filter((n) => n.id !== targetNodeId));
@@ -352,9 +357,10 @@ const handleNodeMenuClick: MenuProps['onClick'] = useCallback(
 
   // Define NODE menu items
   const nodeContextMenuItems: MenuProps['items'] = [
-    { key: 'copy', label: 'Copy Node', icon: <FileTextOutlined /> /* TODO: Use Copy icon */ },
-    { key: 'cut', label: 'Cut Node', icon: <FileTextOutlined /> /* TODO: Use Cut icon */ },
-    { key: 'delete', label: 'Delete Node', icon: <FileTextOutlined />, danger: true /* TODO: Use Delete icon */ },
+    { key: 'copy', label: 'Copy Node', icon: <CopyOutlined /> },
+    { key: 'cut', label: 'Cut Node', icon: <ScissorOutlined /> },
+    { key: 'break-sort', label: '脱离排序', icon: <DisconnectOutlined /> },
+    { key: 'delete', label: 'Delete Node', icon: <DeleteOutlined />, danger: true },
   ];
 
 
