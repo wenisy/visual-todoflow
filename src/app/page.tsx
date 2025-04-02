@@ -81,7 +81,7 @@ const layoutStyle: React.CSSProperties = {
 
 // Helper function to generate UUID
 const generateUuid = () => {
-  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (c) {
     const r = Math.random() * 16 | 0;
     const v = c === 'x' ? r : (r & 0x3 | 0x8);
     return v.toString(16);
@@ -122,7 +122,7 @@ const loadFromLocalStorage = (uuid: string): { nodes: Node[], edges: Edge[], tag
     // Basic check if it looks like our data (can be improved)
     // Check for timestamp existence as part of validation now
     if (parsedData && typeof parsedData === 'object' && ('nodes' in parsedData || 'edges' in parsedData) && 'savedAt' in parsedData) {
-       return parsedData;
+      return parsedData;
     }
     // If data is invalid or old format without timestamp, treat as null and remove
     console.warn("Invalid or old format data found in local storage for:", uuid);
@@ -138,62 +138,62 @@ const loadFromLocalStorage = (uuid: string): { nodes: Node[], edges: Edge[], tag
 
 const clearFromLocalStorage = (uuid: string) => {
   if (!uuid) return;
- try {
-   localStorage.removeItem(`${LOCAL_STORAGE_PREFIX}${uuid}`);
-   // console.log(`Cleared from LS: ${uuid}`);
- } catch (error) {
-   console.error("Failed to clear from local storage:", error);
- }
+  try {
+    localStorage.removeItem(`${LOCAL_STORAGE_PREFIX}${uuid}`);
+    // console.log(`Cleared from LS: ${uuid}`);
+  } catch (error) {
+    console.error("Failed to clear from local storage:", error);
+  }
 };
 
 // --- Local Storage Cleanup ---
 const CLEANUP_INTERVAL_MS = 7 * 24 * 60 * 60 * 1000; // 7 days in milliseconds
 
 const cleanupLocalStorage = () => {
- const now = Date.now();
- let itemsRemoved = 0;
- try {
-   // Iterate safely over keys
-   const keysToRemove: string[] = [];
-   for (let i = 0; i < localStorage.length; i++) {
-     const key = localStorage.key(i);
-     if (key && key.startsWith(LOCAL_STORAGE_PREFIX)) {
-       const item = localStorage.getItem(key);
-       if (item) {
-         try {
-           const parsedData = JSON.parse(item);
-           // Check if it has a timestamp and if it's older than the interval
-           if (parsedData.savedAt && (now - parsedData.savedAt > CLEANUP_INTERVAL_MS)) {
-             keysToRemove.push(key);
-           } else if (!parsedData.savedAt) {
+  const now = Date.now();
+  let itemsRemoved = 0;
+  try {
+    // Iterate safely over keys
+    const keysToRemove: string[] = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key && key.startsWith(LOCAL_STORAGE_PREFIX)) {
+        const item = localStorage.getItem(key);
+        if (item) {
+          try {
+            const parsedData = JSON.parse(item);
+            // Check if it has a timestamp and if it's older than the interval
+            if (parsedData.savedAt && (now - parsedData.savedAt > CLEANUP_INTERVAL_MS)) {
+              keysToRemove.push(key);
+            } else if (!parsedData.savedAt) {
               // Also remove items without a timestamp (old format)
               console.log(`Removing old format LS item (no timestamp): ${key}`);
               keysToRemove.push(key);
-           }
-         } catch (parseError) {
-           // If parsing fails, it might be corrupted, remove it
-           console.warn(`Removing potentially corrupted LS item: ${key}`, parseError);
-           keysToRemove.push(key);
-         }
-       } else {
-         // If key exists but item is null/undefined somehow, mark for removal
-         keysToRemove.push(key);
-       }
-     }
-   }
+            }
+          } catch (parseError) {
+            // If parsing fails, it might be corrupted, remove it
+            console.warn(`Removing potentially corrupted LS item: ${key}`, parseError);
+            keysToRemove.push(key);
+          }
+        } else {
+          // If key exists but item is null/undefined somehow, mark for removal
+          keysToRemove.push(key);
+        }
+      }
+    }
 
-   // Remove identified keys
-   keysToRemove.forEach(key => {
+    // Remove identified keys
+    keysToRemove.forEach(key => {
       localStorage.removeItem(key);
       itemsRemoved++;
-   });
+    });
 
-   if (itemsRemoved > 0) {
+    if (itemsRemoved > 0) {
       console.log(`Local storage cleanup removed ${itemsRemoved} old or invalid item(s).`);
-   }
- } catch (error) {
-   console.error("Error during local storage cleanup:", error);
- }
+    }
+  } catch (error) {
+    console.error("Error during local storage cleanup:", error);
+  }
 };
 
 
@@ -244,6 +244,7 @@ const FlowEditor: React.FC = () => {
   const [reactFlowInstance, setReactFlowInstance] = useState<ReactFlowInstance | null>(null);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [flowcharts, setFlowcharts] = useState<Array<{ tag: string; uuid: string }>>([]);
+  const [filterText, setFilterText] = useState(''); // State for filter input
   const [isSaving, setIsSaving] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [hoveredEdgeId, setHoveredEdgeId] = useState<string | null>(null);
@@ -269,13 +270,13 @@ const FlowEditor: React.FC = () => {
   // Save to localStorage whenever nodes/edges change
   useEffect(() => {
     if (nodes.length === 0 && edges.length === 0) return;
-    
+
     const data = {
       nodes,
       edges,
       tag: currentTag
     };
-    
+
     // If this is a new flowchart (no UUID) or has unsaved changes
     if (!currentUuid || hasUnsavedChanges) {
       localStorage.setItem(`${LOCAL_STORAGE_PREFIX}new`, JSON.stringify(data));
@@ -298,67 +299,67 @@ const FlowEditor: React.FC = () => {
   // Define loadFlowchart outside of onClick
   // Helper function to generate UUID
 
- const loadFlowchart = useCallback(async (uuid: string, options: { skipLocalStorageCheck?: boolean } = {}) => {
-   console.log('loadFlowchart called for uuid:', uuid);
-   setIsLoading(true);
-   setHasUnsavedChanges(false); // Assume loaded state is saved state initially
+  const loadFlowchart = useCallback(async (uuid: string, options: { skipLocalStorageCheck?: boolean } = {}) => {
+    console.log('loadFlowchart called for uuid:', uuid);
+    setIsLoading(true);
+    setHasUnsavedChanges(false); // Assume loaded state is saved state initially
 
-   // 1. Try loading from local storage first (unless skipped)
-   if (!options.skipLocalStorageCheck) {
-       const localData = loadFromLocalStorage(uuid);
-       if (localData) {
-           console.log('Loaded from local storage:', uuid);
-           setNodes(localData.nodes);
-           setEdges(localData.edges);
-           setCurrentTag(localData.tag); // Load tag from LS as well
-           setCurrentUuid(uuid); // Ensure currentUuid is set
-           // Still set loading false after potential background fetch
-       }
-   }
+    // 1. Try loading from local storage first (unless skipped)
+    if (!options.skipLocalStorageCheck) {
+      const localData = loadFromLocalStorage(uuid);
+      if (localData) {
+        console.log('Loaded from local storage:', uuid);
+        setNodes(localData.nodes);
+        setEdges(localData.edges);
+        setCurrentTag(localData.tag); // Load tag from LS as well
+        setCurrentUuid(uuid); // Ensure currentUuid is set
+        // Still set loading false after potential background fetch
+      }
+    }
 
 
-   // 2. Fetch from API to ensure data is up-to-date / if not in LS
-   try {
-     const response = await fetch('/api/notion/load', {
-       method: 'POST',
-       headers: { 'Content-Type': 'application/json' },
-       body: JSON.stringify({ uuid }),
-     });
+    // 2. Fetch from API to ensure data is up-to-date / if not in LS
+    try {
+      const response = await fetch('/api/notion/load', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ uuid }),
+      });
 
-     if (!response.ok) {
-       // If fetch fails but we loaded from LS, keep LS data, show warning
-       if (loadFromLocalStorage(uuid)) {
-           message.warning('Failed to sync with server, showing local version.');
-       } else {
-           throw new Error('Failed to load flowchart and no local version found');
-       }
-     } else {
-       const data = await response.json();
-       // Only update state if fetched data is different from current state
-       // (to avoid unnecessary re-renders if LS was up-to-date)
-       // Note: Deep comparison might be needed for accuracy, but simple length check for now
-       if (nodes.length !== data.nodes?.length || edges.length !== data.edges?.length || currentTag !== data.tag) {
-            console.log('Updating state from fetched data:', uuid);
-            setNodes(data.nodes || []);
-            setEdges(data.edges || []);
-            setCurrentTag(data.tag);
-            // Update local storage with fetched data
-            saveToLocalStorage(uuid, { nodes: data.nodes || [], edges: data.edges || [], tag: data.tag });
-       }
-       setCurrentUuid(data.uuid); // Always ensure UUID is correct from source
-       setHasUnsavedChanges(false); // Reset unsaved changes flag after successful load/sync
-       localStorage.removeItem(`${LOCAL_STORAGE_PREFIX}new`); // Clear unsaved changes after successful load
-     }
-   } catch (error) {
-     console.error('Failed to load flowchart:', error);
-     // Only show error if we didn't load from LS
-     if (!loadFromLocalStorage(uuid)) {
-         message.error('Failed to load flowchart');
-     }
-   } finally {
-     console.log('loadFlowchart fetch attempt completed');
-     setIsLoading(false); // Set loading false after fetch attempt
-   }
+      if (!response.ok) {
+        // If fetch fails but we loaded from LS, keep LS data, show warning
+        if (loadFromLocalStorage(uuid)) {
+          message.warning('Failed to sync with server, showing local version.');
+        } else {
+          throw new Error('Failed to load flowchart and no local version found');
+        }
+      } else {
+        const data = await response.json();
+        // Only update state if fetched data is different from current state
+        // (to avoid unnecessary re-renders if LS was up-to-date)
+        // Note: Deep comparison might be needed for accuracy, but simple length check for now
+        if (nodes.length !== data.nodes?.length || edges.length !== data.edges?.length || currentTag !== data.tag) {
+          console.log('Updating state from fetched data:', uuid);
+          setNodes(data.nodes || []);
+          setEdges(data.edges || []);
+          setCurrentTag(data.tag);
+          // Update local storage with fetched data
+          saveToLocalStorage(uuid, { nodes: data.nodes || [], edges: data.edges || [], tag: data.tag });
+        }
+        setCurrentUuid(data.uuid); // Always ensure UUID is correct from source
+        setHasUnsavedChanges(false); // Reset unsaved changes flag after successful load/sync
+        localStorage.removeItem(`${LOCAL_STORAGE_PREFIX}new`); // Clear unsaved changes after successful load
+      }
+    } catch (error) {
+      console.error('Failed to load flowchart:', error);
+      // Only show error if we didn't load from LS
+      if (!loadFromLocalStorage(uuid)) {
+        message.error('Failed to load flowchart');
+      }
+    } finally {
+      console.log('loadFlowchart fetch attempt completed');
+      setIsLoading(false); // Set loading false after fetch attempt
+    }
   }, [setNodes, setEdges, setCurrentTag, setCurrentUuid]); // Added setCurrentUuid dependency
 
   const [isTagModalVisible, setIsTagModalVisible] = useState(false);
@@ -443,12 +444,12 @@ const FlowEditor: React.FC = () => {
       const numId = parseInt(node.id);
       return !isNaN(numId) ? Math.max(max, numId) : max;
     }, 0);
-    
+
     // Set the counter to max + 1 if it's lower
     if (id <= maxId) {
       id = maxId + 1;
     }
-    
+
     return `${id++}`;
   }, [nodes]);
 
@@ -461,11 +462,11 @@ const FlowEditor: React.FC = () => {
       fileUrl?: string;
       url?: string;
     }
-    
+
     let nodeData: NodeData = {
       label: `${type} node`
     };
-    
+
     switch (type) { // Initialize data properties for each type
       case 'text': nodeData = { label: 'Text Input', text: '' }; break; // Add text: ''
       case 'image': nodeData = { label: 'Image Upload', imageUrl: undefined }; break; // Add imageUrl
@@ -740,7 +741,7 @@ const FlowEditor: React.FC = () => {
           uuid
         }),
       });
-      
+
       // Update UUID if it was newly generated
       if (!currentUuid) {
         setCurrentUuid(uuid);
@@ -785,6 +786,15 @@ const FlowEditor: React.FC = () => {
     setTagInputValue(currentTag);
     setIsTagModalVisible(true);
   };
+
+  // Filtered and sorted flowcharts
+  const filteredFlowcharts = useMemo(() => {
+    return flowcharts
+      .filter(fc => fc.tag.toLowerCase().includes(filterText.toLowerCase()))
+      // The API already sorts by tag descending, so no extra sorting needed here for now.
+      // If created_date was available, sorting would happen here:
+      // .sort((a, b) => new Date(b.created_date).getTime() - new Date(a.created_date).getTime());
+  }, [flowcharts, filterText]);
 
   return (
     <> {/* Use Fragment to wrap Layout and Modal */}
@@ -842,16 +852,23 @@ const FlowEditor: React.FC = () => {
 
               <div style={{ marginTop: '32px' }}>
                 <h3 style={{ marginBottom: '16px' }}>Saved Flowcharts</h3>
+                <Input
+                  placeholder="Filter by name..."
+                  value={filterText}
+                  onChange={(e) => setFilterText(e.target.value)}
+                  style={{ marginBottom: '8px' }}
+                  allowClear
+                />
                 <div style={{
-                  maxHeight: '200px',
+                  maxHeight: '400px', // Adjust max height if needed after adding input
                   overflowY: 'auto',
                   border: '1px solid #f0f0f0',
                   borderRadius: '4px'
                 }}>
                   {flowcharts.length > 0 ? (
-                    <List
+                    filteredFlowcharts.length > 0 ? ( <List
                       size="small"
-                      dataSource={flowcharts}
+                      dataSource={filteredFlowcharts} // Use filtered list
                       renderItem={(flowchart) => (
                         <List.Item
                           style={{
@@ -860,17 +877,17 @@ const FlowEditor: React.FC = () => {
                             backgroundColor: currentUuid === flowchart.uuid ? '#e6f4ff' : undefined,
                             color: currentUuid === flowchart.uuid ? '#1677ff' : undefined
                           }}
-                         onClick={() => {
-                           const newPath = `/?talk=${flowchart.uuid}`;
-                           // Directly load or update URL, no confirmation needed
-                           if (currentUuid !== flowchart.uuid) {
-                             router.push(newPath, { scroll: false }); // Update URL first
-                             loadFlowchart(flowchart.uuid); // Load the new flowchart (checks LS first)
-                           } else {
-                             // If clicking the currently loaded flowchart, just ensure URL is correct
-                             router.push(newPath, { scroll: false });
-                           }
-                         }}
+                          onClick={() => {
+                            const newPath = `/?talk=${flowchart.uuid}`;
+                            // Directly load or update URL, no confirmation needed
+                            if (currentUuid !== flowchart.uuid) {
+                              router.push(newPath, { scroll: false }); // Update URL first
+                              loadFlowchart(flowchart.uuid); // Load the new flowchart (checks LS first)
+                            } else {
+                              // If clicking the currently loaded flowchart, just ensure URL is correct
+                              router.push(newPath, { scroll: false });
+                            }
+                          }}
                         >
                           {isLoading && currentUuid === flowchart.uuid
                             ? `${flowchart.tag} (loading...)`
@@ -878,6 +895,10 @@ const FlowEditor: React.FC = () => {
                         </List.Item>
                       )}
                     />
+                    ) : (
+                      <div style={{ padding: '16px', color: '#888', textAlign: 'center' }}>
+                        No matching flowcharts found.
+                      </div>)
                   ) : (
                     <div style={{ padding: '16px', color: '#888', textAlign: 'center' }}>
                       No saved flowcharts
