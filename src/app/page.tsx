@@ -243,7 +243,8 @@ const FlowEditor: React.FC = () => {
   const [edges, setEdges] = useState<Edge[]>(initialEdges);
   const [reactFlowInstance, setReactFlowInstance] = useState<ReactFlowInstance | null>(null);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
-  const [flowcharts, setFlowcharts] = useState<Array<{ tag: string; uuid: string }>>([]);
+  // Update state type to include created_time
+  const [flowcharts, setFlowcharts] = useState<Array<{ tag: string; uuid: string; created_time: string }>>([]);
   const [filterText, setFilterText] = useState(''); // State for filter input
   const [isSaving, setIsSaving] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -652,7 +653,8 @@ const FlowEditor: React.FC = () => {
         const response = await fetch('/api/notion/list-tags');
         const data = await response.json();
         if (data.flowcharts) {
-          setFlowcharts(data.flowcharts);
+          // Ensure the fetched data matches the new type
+          setFlowcharts(data.flowcharts as Array<{ tag: string; uuid: string; created_time: string }>);
         }
       } catch (error) {
         console.error('Failed to fetch flowcharts:', error);
@@ -789,11 +791,10 @@ const FlowEditor: React.FC = () => {
 
   // Filtered and sorted flowcharts
   const filteredFlowcharts = useMemo(() => {
+    // Filter first, then sort by created_time descending
     return flowcharts
       .filter(fc => fc.tag.toLowerCase().includes(filterText.toLowerCase()))
-      // The API already sorts by tag descending, so no extra sorting needed here for now.
-      // If created_date was available, sorting would happen here:
-      // .sort((a, b) => new Date(b.created_date).getTime() - new Date(a.created_date).getTime());
+      .sort((a, b) => new Date(b.created_time).getTime() - new Date(a.created_time).getTime());
   }, [flowcharts, filterText]);
 
   return (
@@ -860,7 +861,7 @@ const FlowEditor: React.FC = () => {
                   allowClear
                 />
                 <div style={{
-                  maxHeight: '400px', // Adjust max height if needed after adding input
+                  maxHeight: '360px', // Adjust max height slightly after adding input
                   overflowY: 'auto',
                   border: '1px solid #f0f0f0',
                   borderRadius: '4px'

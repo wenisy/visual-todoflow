@@ -18,7 +18,8 @@ export async function GET() {
             database_id: databaseId,
             sorts: [
                 {
-                    property: "Tag",
+                    // Sort by Notion's internal created time property
+                    timestamp: "created_time",
                     direction: "descending"
                 }
             ]
@@ -35,12 +36,13 @@ export async function GET() {
                     uuidProp.rich_text[0]) {
                     return {
                         tag: tagProp.rich_text[0].plain_text,
-                        uuid: uuidProp.rich_text[0].plain_text
+                        uuid: uuidProp.rich_text[0].plain_text,
+                        created_time: page.created_time // Include created_time
                     };
                 }
                 return null;
             })
-            .filter((item): item is { tag: string; uuid: string } => item !== null)
+            .filter((item): item is { tag: string; uuid: string; created_time: string } => item !== null) // Update type guard
             // Remove duplicates based on UUID
             .filter((item, index, self) =>
                 index === self.findIndex((t) => t.uuid === item.uuid)
