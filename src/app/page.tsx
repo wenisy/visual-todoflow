@@ -4,7 +4,7 @@ import React, { useState, useCallback, useRef, DragEvent, useMemo, MouseEvent, u
 import { useRouter, useSearchParams } from 'next/navigation'; // Import useRouter and useSearchParams
 import { Layout, Button, Space, Dropdown, MenuProps, message, Modal, List, Input, App } from 'antd';
 import type { MenuInfo } from 'rc-menu/lib/interface'; // Import MenuInfo type
-import { SaveOutlined, FileTextOutlined, PictureOutlined, PaperClipOutlined, ShareAltOutlined, PlusOutlined, CopyOutlined, ScissorOutlined, DeleteOutlined, DisconnectOutlined } from '@ant-design/icons';
+import { SaveOutlined, FileTextOutlined, PictureOutlined, PaperClipOutlined, ShareAltOutlined, PlusOutlined, CopyOutlined, ScissorOutlined, DeleteOutlined, DisconnectOutlined, CloseCircleOutlined } from '@ant-design/icons'; // Added CloseCircleOutlined
 import ReactFlow, {
   Controls,
   Background,
@@ -198,7 +198,6 @@ const cleanupLocalStorage = () => {
 
 
 // --- Draggable Sidebar Item ---
-// --- Draggable Sidebar Item ---
 // ... (DraggableItem component remains the same)
 interface DraggableItemProps {
   nodeType: string;
@@ -251,6 +250,7 @@ const FlowEditor: React.FC = () => {
   const [hoveredEdgeId, setHoveredEdgeId] = useState<string | null>(null);
   const [currentTag, setCurrentTag] = useState<string>("未命名");
   const [currentUuid, setCurrentUuid] = useState<string>(generateUuid());
+  const [flowchartToDelete, setFlowchartToDelete] = useState<{ uuid: string; tag: string } | null>(null); // State for delete confirmation
 
   // Load unsaved changes from localStorage on mount
   useEffect(() => {
@@ -764,7 +764,7 @@ const FlowEditor: React.FC = () => {
       const flowchartsResponse = await fetch('/api/notion/list-tags');
       const flowchartsData = await flowchartsResponse.json();
       if (flowchartsData.flowcharts) {
-        setFlowcharts(flowchartsData.flowcharts);
+        setFlowcharts(flowchartsData.flowcharts as Array<{ tag: string; uuid: string; created_time: string }>);
       }
 
 
@@ -796,6 +796,48 @@ const FlowEditor: React.FC = () => {
       .filter(fc => fc.tag.toLowerCase().includes(filterText.toLowerCase()))
       .sort((a, b) => new Date(b.created_time).getTime() - new Date(a.created_time).getTime());
   }, [flowcharts, filterText]);
+
+
+  // --- Delete Flowchart Logic ---
+  // Function to initiate deletion confirmation
+  const requestDeleteFlowchart = (flowchart: { uuid: string; tag: string }) => {
+    setFlowchartToDelete(flowchart); // Set state to open the modal
+  };
+
+  // Function to perform the actual deletion after confirmation
+  const confirmDeleteFlowchart = async () => {
+    if (!flowchartToDelete) return;
+
+    const { uuid: uuidToDelete, tag: tagToDelete } = flowchartToDelete;
+
+    message.loading({ content: `正在删除 "${tagToDelete}"...`, key: 'delete_flowchart', duration: 0 });
+    try {
+      const response = await fetch('/api/notion/delete', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ uuid: uuidToDelete }),
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.error || `HTTP error! status: ${response.status}`);
+      }
+
+      message.success({ content: `"${tagToDelete}" 已删除`, key: 'delete_flowchart', duration: 3 });
+
+      // Remove from local state
+      setFlowcharts(prevFlowcharts => prevFlowcharts.filter(fc => fc.uuid !== uuidToDelete));
+
+    } catch (error) {
+      console.error('Failed to delete flowchart:', error);
+      const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred';
+      message.error({ content: `删除失败: ${errorMessage}`, key: 'delete_flowchart', duration: 3 });
+    } finally {
+       setFlowchartToDelete(null); // Close the modal regardless of success/failure
+    }
+  };
+
 
   return (
     <> {/* Use Fragment to wrap Layout and Modal */}
@@ -874,25 +916,45 @@ const FlowEditor: React.FC = () => {
                         <List.Item
                           style={{
                             padding: '8px 12px',
-                            cursor: 'pointer',
+                            // cursor: 'pointer', // Remove cursor from the whole item
                             backgroundColor: currentUuid === flowchart.uuid ? '#e6f4ff' : undefined,
-                            color: currentUuid === flowchart.uuid ? '#1677ff' : undefined
+                            color: currentUuid === flowchart.uuid ? '#1677ff' : undefined,
+                            display: 'flex', // Use flexbox for alignment
+                            justifyContent: 'space-between', // Space out content and button
+                            alignItems: 'center', // Vertically align items
                           }}
-                          onClick={() => {
-                            const newPath = `/?talk=${flowchart.uuid}`;
-                            // Directly load or update URL, no confirmation needed
-                            if (currentUuid !== flowchart.uuid) {
-                              router.push(newPath, { scroll: false }); // Update URL first
-                              loadFlowchart(flowchart.uuid); // Load the new flowchart (checks LS first)
-                            } else {
-                              // If clicking the currently loaded flowchart, just ensure URL is correct
-                              router.push(newPath, { scroll: false });
-                            }
-                          }}
+                          // Remove onClick from List.Item to avoid conflicts
                         >
-                          {isLoading && currentUuid === flowchart.uuid
-                            ? `${flowchart.tag} (loading...)`
-                            : flowchart.tag}
+                          {/* Flowchart Tag - Make this clickable */}
+                          <span
+                            style={{ flexGrow: 1, marginRight: '8px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', cursor: 'pointer' }} // Add cursor pointer here
+                            onClick={() => { // Add onClick here for loading
+                                const newPath = `/?talk=${flowchart.uuid}`;
+                                if (currentUuid !== flowchart.uuid) {
+                                  router.push(newPath, { scroll: false });
+                                  loadFlowchart(flowchart.uuid);
+                                } else {
+                                  router.push(newPath, { scroll: false });
+                                }
+                            }}
+                          >
+                            {isLoading && currentUuid === flowchart.uuid
+                              ? `${flowchart.tag} (loading...)`
+                              : flowchart.tag}
+                          </span>
+
+                          {/* Delete Button */}
+                          <Button
+                            type="text"
+                            danger
+                            icon={<CloseCircleOutlined />}
+                            size="small"
+                            onClick={(e) => {
+                              e.stopPropagation(); // Prevent any potential parent onClick handlers
+                              requestDeleteFlowchart(flowchart); // Call function to set state and open modal
+                            }}
+                            style={{ flexShrink: 0 }} // Prevent button from shrinking
+                          />
                         </List.Item>
                       )}
                     />
@@ -1010,6 +1072,20 @@ const FlowEditor: React.FC = () => {
             onPressEnter={() => confirmSave(tagInputValue)} // Allow saving with Enter key
           />
         </Modal>
+
+        {/* Delete Confirmation Modal */}
+        <Modal
+          title={`确认删除 "${flowchartToDelete?.tag}"?`}
+          open={!!flowchartToDelete}
+          onOk={confirmDeleteFlowchart}
+          onCancel={() => setFlowchartToDelete(null)}
+          okText="确认删除"
+          okType="danger"
+          cancelText="取消"
+        >
+          <p>此操作将从 Notion 中删除该流程图，且无法撤销。</p>
+        </Modal>
+
       </Layout>
     </> // Close Fragment
   );
