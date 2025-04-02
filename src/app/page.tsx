@@ -829,6 +829,19 @@ const FlowEditor: React.FC = () => {
       // Remove from local state
       setFlowcharts(prevFlowcharts => prevFlowcharts.filter(fc => fc.uuid !== uuidToDelete));
 
+      // Check if the deleted flowchart was the currently loaded one
+      if (uuidToDelete === currentUuid) {
+        // Reset to a new state - Ensure state updates happen first
+        const newUuid = generateUuid(); // Generate new UUID
+        setNodes([]);
+        setEdges([]);
+        setCurrentTag("未命名");
+        setCurrentUuid(newUuid); // Set the new UUID
+        setHasUnsavedChanges(false);
+        // THEN clear URL params, which might trigger the searchParams effect
+        router.push('/', { scroll: false });
+      }
+
     } catch (error) {
       console.error('Failed to delete flowchart:', error);
       const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred';
