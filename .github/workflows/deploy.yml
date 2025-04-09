@@ -31,7 +31,11 @@ jobs:
         run: npm install
 
       - name: Build
-        run: npm run build
+        run: |
+          echo "Building Next.js application..."
+          npm run build
+          echo "Build completed. Checking output directory:"
+          ls -la out/
 
       - name: Prepare output
         run: |
