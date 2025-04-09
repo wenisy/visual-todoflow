@@ -1,10 +1,13 @@
 'use client';
 
 import React, { useState, useCallback, useRef, DragEvent, useMemo, MouseEvent, useEffect } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation'; // Import useRouter and useSearchParams
+import { useRouter, useSearchParams } from 'next/navigation';
 import { Layout, Button, Space, Dropdown, MenuProps, message, Modal, List, Input, App } from 'antd';
-import type { MenuInfo } from 'rc-menu/lib/interface'; // Import MenuInfo type
-import { SaveOutlined, FileTextOutlined, PictureOutlined, PaperClipOutlined, ShareAltOutlined, PlusOutlined, CopyOutlined, ScissorOutlined, DeleteOutlined, DisconnectOutlined, CloseCircleOutlined } from '@ant-design/icons'; // Added CloseCircleOutlined
+import { LogoutOutlined, SaveOutlined, FileTextOutlined, PictureOutlined, PaperClipOutlined, ShareAltOutlined, PlusOutlined, CopyOutlined, ScissorOutlined, DeleteOutlined, DisconnectOutlined, CloseCircleOutlined } from '@ant-design/icons';
+import type { MenuInfo } from 'rc-menu/lib/interface';
+import { useAuth } from '@/hooks/useAuth';
+import LoginModal from '@/components/LoginModal';
+import { API_ENDPOINTS, getAuthHeaders } from '@/config/api';
 import ReactFlow, {
   Controls,
   Background,
@@ -234,15 +237,15 @@ const DraggableItem: React.FC<DraggableItemProps> = ({ nodeType, label, icon }) 
 
 // --- Main Flow Component ---
 const FlowEditor: React.FC = () => {
-  // const { modal } = App.useApp(); // Removed unused modal
-  const router = useRouter(); // Get router instance
-  const searchParams = useSearchParams(); // Get search params
+  const { isAuthenticated, login, logout } = useAuth();
+  const [showLoginModal, setShowLoginModal] = useState(!isAuthenticated);
+  const router = useRouter();
+  const searchParams = useSearchParams();
   const reactFlowWrapper = useRef<HTMLDivElement>(null);
   const [nodes, setNodes] = useState<Node[]>(initialNodes);
   const [edges, setEdges] = useState<Edge[]>(initialEdges);
   const [reactFlowInstance, setReactFlowInstance] = useState<ReactFlowInstance | null>(null);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
-  // Update state type to include created_time
   const [flowcharts, setFlowcharts] = useState<Array<{ tag: string; uuid: string; created_time: string }>>([]);
   const [filterText, setFilterText] = useState(''); // State for filter input
   const [isSaving, setIsSaving] = useState(false);
@@ -301,29 +304,30 @@ const FlowEditor: React.FC = () => {
   // Helper function to generate UUID
 
   const loadFlowchart = useCallback(async (uuid: string, options: { skipLocalStorageCheck?: boolean } = {}) => {
+    if (!isAuthenticated) {
+      setShowLoginModal(true);
+      return;
+    }
+
     console.log('loadFlowchart called for uuid:', uuid);
     setIsLoading(true);
-    setHasUnsavedChanges(false); // Assume loaded state is saved state initially
+    setHasUnsavedChanges(false);
 
-    // 1. Try loading from local storage first (unless skipped)
     if (!options.skipLocalStorageCheck) {
       const localData = loadFromLocalStorage(uuid);
       if (localData) {
         console.log('Loaded from local storage:', uuid);
         setNodes(localData.nodes);
         setEdges(localData.edges);
-        setCurrentTag(localData.tag); // Load tag from LS as well
-        setCurrentUuid(uuid); // Ensure currentUuid is set
-        // Still set loading false after potential background fetch
+        setCurrentTag(localData.tag);
+        setCurrentUuid(uuid);
       }
     }
 
-
-    // 2. Fetch from API to ensure data is up-to-date / if not in LS
     try {
-      const response = await fetch('/api/notion/load', {
+      const response = await fetch(API_ENDPOINTS.notionLoad, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: getAuthHeaders(),
         body: JSON.stringify({ uuid }),
       });
 
@@ -731,15 +735,13 @@ const FlowEditor: React.FC = () => {
 
     try {
       const uuid = currentUuid || generateUuid();
-      const response = await fetch('/api/notion/save', {
+      const response = await fetch(API_ENDPOINTS.notionSave, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: getAuthHeaders(),
         body: JSON.stringify({
           nodes: currentNodes,
           edges: currentEdges,
-          tag, // Use the provided tag
+          tag,
           uuid
         }),
       });
@@ -761,7 +763,9 @@ const FlowEditor: React.FC = () => {
       clearFromLocalStorage(uuid); // Use the uuid that was saved
 
       // Refresh tags list
-      const flowchartsResponse = await fetch('/api/notion/list-tags');
+      const flowchartsResponse = await fetch(API_ENDPOINTS.notionListTags, {
+        headers: getAuthHeaders()
+      });
       const flowchartsData = await flowchartsResponse.json();
       if (flowchartsData.flowcharts) {
         setFlowcharts(flowchartsData.flowcharts as Array<{ tag: string; uuid: string; created_time: string }>);
@@ -812,9 +816,9 @@ const FlowEditor: React.FC = () => {
 
     message.loading({ content: `正在删除 "${tagToDelete}"...`, key: 'delete_flowchart', duration: 0 });
     try {
-      const response = await fetch('/api/notion/delete', {
+      const response = await fetch(API_ENDPOINTS.notionDelete, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: getAuthHeaders(),
         body: JSON.stringify({ uuid: uuidToDelete }),
       });
 
@@ -853,47 +857,73 @@ const FlowEditor: React.FC = () => {
 
 
   return (
-    <> {/* Use Fragment to wrap Layout and Modal */}
+    <>
+      <LoginModal
+        open={showLoginModal}
+        onCancel={() => setShowLoginModal(false)}
+        onSuccess={(token) => {
+          login(token);
+          setShowLoginModal(false);
+        }}
+      />
       <Layout style={layoutStyle}>
         <Header style={headerStyle}>
           <div style={{ fontSize: '1.5rem', fontWeight: 'bold' }}>Visual TodoFlow</div>
-          <Input
-            style={{ fontSize: '1.2rem', color: '#1677ff', width: '200px', textAlign: 'center' }}
-            value={currentTag || "未命名"}
-            onChange={(e) => setCurrentTag(e.target.value)}
-            onPressEnter={(e) => {
-              const newTag = e.currentTarget.value;
-              if (newTag) {
-                setCurrentTag(newTag);
-              }
-            }}
-          />
-          <Space>
+          {isAuthenticated ? (
+            <>
+              <Input
+                style={{ fontSize: '1.2rem', color: '#1677ff', width: '200px', textAlign: 'center' }}
+                value={currentTag || "未命名"}
+                onChange={(e) => setCurrentTag(e.target.value)}
+                onPressEnter={(e) => {
+                  const newTag = e.currentTarget.value;
+                  if (newTag) {
+                    setCurrentTag(newTag);
+                  }
+                }}
+              />
+              <Space>
+                <Button
+                  type="primary"
+                  icon={<SaveOutlined />}
+                  onClick={handleSave}
+                  loading={isSaving}
+                >
+                  保存
+                </Button>
+                <Button
+                  icon={<PlusOutlined />}
+                  onClick={() => {
+                    const newUuid = generateUuid();
+                    setNodes([]);
+                    setEdges([]);
+                    setCurrentTag("未命名");
+                    setCurrentUuid(newUuid);
+                    setHasUnsavedChanges(false);
+                    router.push('/', { scroll: false });
+                  }}
+                >
+                  新建
+                </Button>
+                <Button
+                  icon={<LogoutOutlined />}
+                  onClick={() => {
+                    logout();
+                    setShowLoginModal(true);
+                  }}
+                >
+                  退出登录
+                </Button>
+              </Space>
+            </>
+          ) : (
             <Button
               type="primary"
-              icon={<SaveOutlined />}
-              onClick={handleSave}
-              loading={isSaving}
+              onClick={() => setShowLoginModal(true)}
             >
-              Save
+              登录
             </Button>
-            <Button
-              icon={<PlusOutlined />}
-              onClick={() => {
-                // Directly create new canvas state
-                const newUuid = generateUuid();
-                setNodes([]);
-                setEdges([]);
-                setCurrentTag("未命名");
-                setCurrentUuid(newUuid);
-                setHasUnsavedChanges(false); // A new canvas starts as "saved"
-                router.push('/', { scroll: false }); // Clear URL params
-                // The auto-save effect will save this new empty state to LS under newUuid
-              }}
-            >
-              新建
-            </Button>
-          </Space>
+          )}
         </Header>
         <Layout>
           <Sider width={250} style={siderStyle}>
