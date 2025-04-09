@@ -365,7 +365,7 @@ const FlowEditor: React.FC = () => {
       console.log('loadFlowchart fetch attempt completed');
       setIsLoading(false); // Set loading false after fetch attempt
     }
-  }, [setNodes, setEdges, setCurrentTag, setCurrentUuid]); // Added setCurrentUuid dependency
+  }, [setNodes, setEdges, setCurrentTag, setCurrentUuid, isAuthenticated, currentTag, nodes.length, edges.length, setShowLoginModal]); // Added missing dependencies
 
   const [isTagModalVisible, setIsTagModalVisible] = useState(false);
   const [tagInputValue, setTagInputValue] = useState('');
@@ -563,7 +563,7 @@ const FlowEditor: React.FC = () => {
 
       setMenu({ show: false, x: 0, y: 0 }); // Hide pane menu
     },
-    [addNode, menu.x, menu.y, reactFlowInstance, clipboard, setNodes, setClipboard] // Added clipboard dependencies
+    [addNode, menu.x, menu.y, reactFlowInstance, clipboard, setNodes, setClipboard, getId] // Added getId dependency
   );
 
 

@@ -1,7 +1,18 @@
-import React, { memo, useState, useCallback, useEffect } from 'react'; // Added useEffect
+import React, { memo, useState, useCallback, useEffect } from 'react';
 import { Handle, Position, NodeProps } from 'reactflow';
 import { ShareAltOutlined } from '@ant-design/icons';
-import { Input, Tooltip } from 'antd';
+import { Input } from 'antd';
+
+// Twitter type declaration
+declare global {
+  interface Window {
+    twttr?: {
+      widgets?: {
+        load: () => void;
+      };
+    };
+  }
+}
 
 // Basic styling
 const nodeStyle: React.CSSProperties = {
@@ -56,7 +67,7 @@ const fetchEmbedPreview = async (url: string) => {
 };
 
 
-const SocialNode = memo(({ data, id, selected }: NodeProps<SocialNodeData>) => {
+const SocialNode = memo(({ data, id }: NodeProps<SocialNodeData>) => {
   const [url, setUrl] = useState<string>(data.url || '');
   const [embedHtml, setEmbedHtml] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(false);
@@ -80,9 +91,8 @@ const SocialNode = memo(({ data, id, selected }: NodeProps<SocialNodeData>) => {
                 setEmbedHtml(embedData.html);
                 // Special handling for Twitter widget loading
                 if (url.includes('twitter.com') || url.includes('x.com')) {
-                    // @ts-ignore - Check if twttr object exists and load widgets
+                    // Check if twttr object exists and load widgets
                     if (window.twttr?.widgets?.load) {
-                        // @ts-ignore
                         window.twttr.widgets.load();
                     } else {
                         // Load the script if it's not already loaded (basic check)

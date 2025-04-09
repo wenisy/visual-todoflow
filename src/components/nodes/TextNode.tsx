@@ -1,7 +1,6 @@
 import React, { memo, useState, useEffect, useCallback, useMemo } from 'react';
 import { Handle, Position, NodeProps, useReactFlow, useStoreApi, Edge } from 'reactflow';
 import { Input, Dropdown } from 'antd';
-import type { MenuProps } from 'antd';
 
 const { TextArea } = Input;
 
@@ -67,7 +66,7 @@ const orderBadgeStyle: React.CSSProperties = {
 };
 
 // Destructure the order prop here
-const TextNode = memo(({ id, data, selected, order }: TextNodeProps) => {
+const TextNode = memo(({ id, data, order }: TextNodeProps) => {
   const [isEditing, setIsEditing] = useState(false);
   const [nodeText, setNodeText] = useState(data.text || '');
   const { setNodes, setEdges } = useReactFlow();

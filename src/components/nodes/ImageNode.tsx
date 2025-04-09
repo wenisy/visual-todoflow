@@ -1,8 +1,10 @@
 import React, { memo, useState, useEffect, useCallback } from 'react';
-import { Handle, Position, NodeProps, useReactFlow, useStoreApi } from 'reactflow'; // Added hooks
+import { Handle, Position, NodeProps, useReactFlow, useStoreApi } from 'reactflow';
 import { PictureOutlined, UploadOutlined } from '@ant-design/icons';
-import { Button, Upload, message, Spin } from 'antd'; // Added Spin
-import type { UploadChangeParam } from 'antd/es/upload/interface'; // Import specific type
+import { Button, Upload, message, Spin } from 'antd';
+import Image from 'next/image';
+import type { UploadChangeParam } from 'antd/es/upload/interface';
+import { API_ENDPOINTS } from '@/config/api';
 
 // Basic styling
 const nodeStyle: React.CSSProperties = {
@@ -28,15 +30,6 @@ const contentStyle: React.CSSProperties = {
   color: '#555',
   textAlign: 'center',
   minHeight: '50px', // Ensure space for spinner or image
-};
-
-const imagePreviewStyle: React.CSSProperties = {
-    maxWidth: '100%',
-    maxHeight: '150px',
-    marginTop: '8px',
-    display: 'block',
-    marginLeft: 'auto',
-    marginRight: 'auto',
 };
 
 // Basic handle style
@@ -125,11 +118,19 @@ const ImageNode = memo(({ data, id }: NodeProps<ImageNodeData>) => {
         {isLoading ? (
             <Spin />
         ) : imageUrl ? (
-          <img src={imageUrl} alt="Uploaded preview" style={imagePreviewStyle} />
+          <div style={{ position: 'relative', width: '100%', height: '150px' }}>
+            <Image
+              src={imageUrl}
+              alt="Uploaded preview"
+              fill
+              style={{ objectFit: 'contain' }}
+              unoptimized
+            />
+          </div>
         ) : (
           <Upload
-            name="file" // This key must match the one expected by the backend (formidable)
-            action="/api/upload" // Point to the upload API route
+            name="file"
+            action={API_ENDPOINTS.upload}
             showUploadList={false}
             onChange={handleUploadChange}
             // Optional: Add headers, progress handling, etc.
