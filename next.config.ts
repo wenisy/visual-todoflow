@@ -2,17 +2,19 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   output: 'export',
-  distDir: 'dist',
+  distDir: 'out',
   images: {
     unoptimized: true,
   },
-  trailingSlash: true,
   typescript: {
     ignoreBuildErrors: true,
   },
   eslint: {
     ignoreDuringBuilds: true,
-  }
+  },
+  // Make sure the app is served from the correct path
+  basePath: '',
+  assetPrefix: ''
 };
 
 export default nextConfig;

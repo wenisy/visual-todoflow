@@ -22,13 +22,13 @@ jobs:
       - name: Install dependencies
         run: npm install
 
-      - name: Build
-        run: npm run build
+      - name: Build and Export
+        run: |
+          npm run build
+          cp -r public/* out/
+          touch out/.nojekyll
 
-      - name: Export static files
-        run: mkdir -p out && cp -r dist/* out/
-
-      - name: Configure output
+      - name: Configure custom domain
         run: |
           touch ./out/.nojekyll
           cp public/CNAME ./out/
