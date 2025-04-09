@@ -1,12 +1,13 @@
 {
   "name": "visual-todoflow",
   "version": "0.1.0",
-  "private": true,
+  "homepage": "https://todo.nodal.link",
   "scripts": {
     "dev": "next dev --turbopack",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "export": "next export"
   },
   "dependencies": {
     "@ant-design/icons": "^6.0.0",
