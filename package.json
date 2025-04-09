@@ -1,7 +1,7 @@
 {
   "name": "visual-todoflow",
   "version": "0.1.0",
-  "homepage": "https://visual-todoflow-backend.vercel.app",
+  "homepage": "https://todo.nodal.link",
   "scripts": {
     "dev": "next dev --turbopack",
     "build": "next build",
