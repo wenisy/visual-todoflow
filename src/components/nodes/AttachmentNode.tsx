@@ -3,6 +3,7 @@ import { Handle, Position, NodeProps, useReactFlow, useStoreApi } from 'reactflo
 import { PaperClipOutlined, UploadOutlined, FileOutlined } from '@ant-design/icons';
 import { Button, Upload, message, Tooltip, Spin } from 'antd'; // Import Spin from antd
 import type { UploadChangeParam } from 'antd/es/upload/interface'; // Import specific type
+import { API_ENDPOINTS } from '@/config/api';
 
 // Basic styling
 const nodeStyle: React.CSSProperties = {
@@ -31,22 +32,22 @@ const contentStyle: React.CSSProperties = {
 };
 
 const fileInfoStyle: React.CSSProperties = {
-    marginTop: '8px',
-    padding: '5px 8px',
-    background: '#f9f9f9',
-    borderRadius: '4px',
-    display: 'inline-flex', // Use inline-flex to fit content
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: '5px',
-    maxWidth: '100%', // Prevent overflow
+  marginTop: '8px',
+  padding: '5px 8px',
+  background: '#f9f9f9',
+  borderRadius: '4px',
+  display: 'inline-flex', // Use inline-flex to fit content
+  alignItems: 'center',
+  justifyContent: 'center',
+  gap: '5px',
+  maxWidth: '100%', // Prevent overflow
 };
 
 // Basic handle style
 const handleStyle: React.CSSProperties = {
-    background: '#555',
-    width: '8px',
-    height: '8px',
+  background: '#555',
+  width: '8px',
+  height: '8px',
 };
 
 // Define the props specific to our AttachmentNode data
@@ -87,7 +88,7 @@ const AttachmentNode = memo(({ data, id }: NodeProps<AttachmentNodeData>) => {
   }, [id, setNodes, store]);
 
   const handleUploadChange = (info: UploadChangeParam) => {
-     if (info.file.status === 'uploading') {
+    if (info.file.status === 'uploading') {
       setIsLoading(true);
       return;
     }
@@ -133,36 +134,36 @@ const AttachmentNode = memo(({ data, id }: NodeProps<AttachmentNodeData>) => {
       </div>
       <div style={contentStyle}>
         {isLoading ? (
-            <Spin />
+          <Spin />
         ) : fileName ? (
           <Tooltip title={fileName}>
             {/* Make the file info clickable if URL exists */}
             {fileUrl ? (
-                 <a href={fileUrl} target="_blank" rel="noopener noreferrer" style={{ textDecoration: 'none' }}>
-                    <div style={fileInfoStyle}>
-                        <FileOutlined />
-                        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: '#333' }}>
-                            {fileName}
-                        </span>
-                    </div>
-                 </a>
+              <a href={fileUrl} target="_blank" rel="noopener noreferrer" style={{ textDecoration: 'none' }}>
+                <div style={fileInfoStyle}>
+                  <FileOutlined />
+                  <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: '#333' }}>
+                    {fileName}
+                  </span>
+                </div>
+              </a>
             ) : (
-                 <div style={fileInfoStyle}>
-                    <FileOutlined />
-                    <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                        {fileName}
-                    </span>
-                 </div>
+              <div style={fileInfoStyle}>
+                <FileOutlined />
+                <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {fileName}
+                </span>
+              </div>
             )}
 
           </Tooltip>
         ) : (
           <Upload
             name="file" // Key for the backend
-            action="/api/upload" // API endpoint
+            action={API_ENDPOINTS.upload} // API endpoint
             showUploadList={false}
             onChange={handleUploadChange}
-            // beforeUpload={...} // Optional validation
+          // beforeUpload={...} // Optional validation
           >
             <Button icon={<UploadOutlined />}>Upload File</Button>
           </Upload>

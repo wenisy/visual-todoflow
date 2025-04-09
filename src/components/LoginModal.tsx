@@ -2,6 +2,7 @@
 
 import React, { useState } from 'react';
 import { Modal, Form, Input, Button, message } from 'antd';
+import { API_ENDPOINTS } from '@/config/api';
 
 interface LoginModalProps {
   open: boolean;
@@ -15,7 +16,7 @@ const LoginModal: React.FC<LoginModalProps> = ({ open, onCancel, onSuccess }) =>
   const handleLogin = async (values: { username: string; password: string }) => {
     setLoading(true);
     try {
-      const response = await fetch('https://visual-todoflow-backend.vercel.app/api/login', {
+      const response = await fetch(API_ENDPOINTS.login, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

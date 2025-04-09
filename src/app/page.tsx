@@ -657,7 +657,9 @@ const FlowEditor: React.FC<FlowEditorProps> = ({ searchParams }) => {
     // 1. Fetch list of saved flowcharts
     const fetchFlowcharts = async () => {
       try {
-        const response = await fetch('/api/notion/list-tags');
+        const response = await fetch(API_ENDPOINTS.notionListTags, {
+          headers: getAuthHeaders()
+        });
         const data = await response.json();
         if (data.flowcharts) {
           // Ensure the fetched data matches the new type
@@ -854,7 +856,7 @@ const FlowEditor: React.FC<FlowEditorProps> = ({ searchParams }) => {
       const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred';
       message.error({ content: `删除失败: ${errorMessage}`, key: 'delete_flowchart', duration: 3 });
     } finally {
-       setFlowchartToDelete(null); // Close the modal regardless of success/failure
+      setFlowchartToDelete(null); // Close the modal regardless of success/failure
     }
   };
 
@@ -955,7 +957,7 @@ const FlowEditor: React.FC<FlowEditorProps> = ({ searchParams }) => {
                   borderRadius: '4px'
                 }}>
                   {flowcharts.length > 0 ? (
-                    filteredFlowcharts.length > 0 ? ( <List
+                    filteredFlowcharts.length > 0 ? (<List
                       size="small"
                       dataSource={filteredFlowcharts} // Use filtered list
                       renderItem={(flowchart) => (
@@ -969,19 +971,19 @@ const FlowEditor: React.FC<FlowEditorProps> = ({ searchParams }) => {
                             justifyContent: 'space-between', // Space out content and button
                             alignItems: 'center', // Vertically align items
                           }}
-                          // Remove onClick from List.Item to avoid conflicts
+                        // Remove onClick from List.Item to avoid conflicts
                         >
                           {/* Flowchart Tag - Make this clickable */}
                           <span
                             style={{ flexGrow: 1, marginRight: '8px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', cursor: 'pointer' }} // Add cursor pointer here
                             onClick={() => { // Add onClick here for loading
-                                const newPath = `/?talk=${flowchart.uuid}`;
-                                if (currentUuid !== flowchart.uuid) {
-                                  router.push(newPath, { scroll: false });
-                                  loadFlowchart(flowchart.uuid);
-                                } else {
-                                  router.push(newPath, { scroll: false });
-                                }
+                              const newPath = `/?talk=${flowchart.uuid}`;
+                              if (currentUuid !== flowchart.uuid) {
+                                router.push(newPath, { scroll: false });
+                                loadFlowchart(flowchart.uuid);
+                              } else {
+                                router.push(newPath, { scroll: false });
+                              }
                             }}
                           >
                             {isLoading && currentUuid === flowchart.uuid
