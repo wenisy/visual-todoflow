@@ -25,11 +25,13 @@ jobs:
       - name: Build
         run: npm run build
 
-      - name: Export
-        run: npm run export
+      - name: Export static files
+        run: mkdir -p out && cp -r dist/* out/
 
-      - name: Add .nojekyll file
-        run: touch ./out/.nojekyll
+      - name: Configure output
+        run: |
+          touch ./out/.nojekyll
+          cp public/CNAME ./out/
 
       - name: Deploy
         uses: JamesIves/github-pages-deploy-action@v4
