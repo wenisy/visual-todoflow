@@ -26,7 +26,6 @@ jobs:
         run: |
           npm run build
           cp -r public/* out/
-          touch out/.nojekyll
 
       - name: Configure custom domain
         run: |
@@ -34,8 +33,11 @@ jobs:
           cp public/CNAME ./out/
 
       - name: Deploy
-        uses: JamesIves/github-pages-deploy-action@v4
+        uses: JamesIves/github-pages-deploy-action@v4.5.0
         with:
           branch: gh-pages
           folder: out
           clean: true
+          token: ${{ secrets.GITHUB_TOKEN }}
+          git-config-name: GitHub Actions
+          git-config-email: github-actions@github.com
