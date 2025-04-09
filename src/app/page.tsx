@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useCallback, useRef, DragEvent, useMemo, MouseEvent, useEffect } from 'react';
+import React, { useState, useCallback, useRef, DragEvent, useMemo, MouseEvent, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Layout, Button, Space, Dropdown, MenuProps, message, Modal, List, Input, App } from 'antd';
 import { LogoutOutlined, SaveOutlined, FileTextOutlined, PictureOutlined, PaperClipOutlined, ShareAltOutlined, PlusOutlined, CopyOutlined, ScissorOutlined, DeleteOutlined, DisconnectOutlined, CloseCircleOutlined } from '@ant-design/icons';
@@ -236,11 +236,14 @@ const DraggableItem: React.FC<DraggableItemProps> = ({ nodeType, label, icon }) 
 
 
 // --- Main Flow Component ---
-const FlowEditor: React.FC = () => {
+interface FlowEditorProps {
+  searchParams: ReturnType<typeof useSearchParams>;
+}
+
+const FlowEditor: React.FC<FlowEditorProps> = ({ searchParams }) => {
   const { isAuthenticated, login, logout } = useAuth();
   const [showLoginModal, setShowLoginModal] = useState(!isAuthenticated);
   const router = useRouter();
-  const searchParams = useSearchParams();
   const reactFlowWrapper = useRef<HTMLDivElement>(null);
   const [nodes, setNodes] = useState<Node[]>(initialNodes);
   const [edges, setEdges] = useState<Edge[]>(initialEdges);
@@ -1135,11 +1138,20 @@ const FlowEditor: React.FC = () => {
 }
 
 // Wrap main export in ReactFlowProvider and App for Modal context
+const FlowWithSearchParams = () => {
+  const searchParams = useSearchParams();
+  return (
+    <FlowEditor searchParams={searchParams} />
+  );
+};
+
 export default function Home() {
   return (
     <App>
       <ReactFlowProvider>
-        <FlowEditor />
+        <Suspense fallback={<div>Loading flow editor...</div>}>
+          <FlowWithSearchParams />
+        </Suspense>
       </ReactFlowProvider>
     </App>
   );
