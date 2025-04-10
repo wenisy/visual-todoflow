@@ -3,7 +3,7 @@ import { Handle, Position, NodeProps, useReactFlow, useStoreApi } from 'reactflo
 import { PaperClipOutlined, UploadOutlined, FileOutlined } from '@ant-design/icons';
 import { Button, Upload, message, Tooltip, Spin } from 'antd'; // Import Spin from antd
 import type { UploadChangeParam } from 'antd/es/upload/interface'; // Import specific type
-import { API_ENDPOINTS } from '@/config/api';
+import { API_ENDPOINTS, getAuthHeaders } from '@/config/api';
 
 // Basic styling
 const nodeStyle: React.CSSProperties = {
@@ -161,6 +161,7 @@ const AttachmentNode = memo(({ data, id }: NodeProps<AttachmentNodeData>) => {
           <Upload
             name="file" // Key for the backend
             action={API_ENDPOINTS.upload} // API endpoint
+            headers={getAuthHeaders()}
             showUploadList={false}
             onChange={handleUploadChange}
           // beforeUpload={...} // Optional validation

@@ -4,7 +4,7 @@ import { PictureOutlined, UploadOutlined } from '@ant-design/icons';
 import { Button, Upload, message, Spin } from 'antd';
 import Image from 'next/image';
 import type { UploadChangeParam } from 'antd/es/upload/interface';
-import { API_ENDPOINTS } from '@/config/api';
+import { API_ENDPOINTS, getAuthHeaders } from '@/config/api';
 
 // Basic styling
 const nodeStyle: React.CSSProperties = {
@@ -131,6 +131,7 @@ const ImageNode = memo(({ data, id }: NodeProps<ImageNodeData>) => {
           <Upload
             name="file"
             action={API_ENDPOINTS.upload}
+            headers={getAuthHeaders()}
             showUploadList={false}
             onChange={handleUploadChange}
             // Optional: Add headers, progress handling, etc.
