@@ -15,6 +15,7 @@ const LoginModal: React.FC<LoginModalProps> = ({ open, onCancel, onSuccess }) =>
 
   const handleLogin = async (values: { username: string; password: string }) => {
     setLoading(true);
+    message.loading({ content: '正在登录...', key: 'login' });
     try {
       const response = await fetch(API_ENDPOINTS.login, {
         method: 'POST',
@@ -25,7 +26,7 @@ const LoginModal: React.FC<LoginModalProps> = ({ open, onCancel, onSuccess }) =>
       });
 
       if (!response.ok) {
-        throw new Error('登录失败');
+        throw new Error(`登录失败: ${response.status}`);
       }
 
       const data = await response.json();
@@ -34,12 +35,16 @@ const LoginModal: React.FC<LoginModalProps> = ({ open, onCancel, onSuccess }) =>
         localStorage.setItem('auth_token', data.token);
         localStorage.setItem('token_timestamp', Date.now().toString());
         onSuccess(data.token);
-        message.success('登录成功');
+        message.success({ content: '登录成功', key: 'login' });
       } else {
         throw new Error('未获取到登录令牌');
       }
-    } catch {
-      message.error('登录失败，请检查用户名和密码');
+    } catch (error) {
+      console.error('Login error:', error);
+      message.error({
+        content: '登录失败，请检查用户名和密码',
+        key: 'login'
+      });
     } finally {
       setLoading(false);
     }

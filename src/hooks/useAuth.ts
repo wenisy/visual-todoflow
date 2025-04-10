@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 
 interface AuthState {
   isAuthenticated: boolean;
@@ -15,7 +15,9 @@ export const useAuth = () => {
     token: null,
   });
 
-  const checkTokenValidity = () => {
+  const checkTokenValidity = useCallback(() => {
+    if (typeof window === 'undefined') return false; // 服务器端渲染时不执行
+
     const token = localStorage.getItem('auth_token');
     const timestamp = localStorage.getItem('token_timestamp');
 
@@ -31,8 +33,9 @@ export const useAuth = () => {
     }
 
     return true;
-  };
+  }, []);
 
+  // 初始化时检查登录状态
   useEffect(() => {
     const isValid = checkTokenValidity();
     const token = isValid ? localStorage.getItem('auth_token') : null;
@@ -41,29 +44,30 @@ export const useAuth = () => {
       isAuthenticated: isValid,
       token,
     });
-  }, []);
+  }, [checkTokenValidity]);
 
-  const login = (token: string) => {
+  const login = useCallback((token: string) => {
     localStorage.setItem('auth_token', token);
     localStorage.setItem('token_timestamp', Date.now().toString());
     setAuthState({
       isAuthenticated: true,
       token,
     });
-  };
+  }, []);
 
-  const logout = () => {
+  const logout = useCallback(() => {
     localStorage.removeItem('auth_token');
     localStorage.removeItem('token_timestamp');
     setAuthState({
       isAuthenticated: false,
       token: null,
     });
-  };
+  }, []);
 
   return {
     ...authState,
     login,
     logout,
+    checkTokenValidity,
   };
 };
