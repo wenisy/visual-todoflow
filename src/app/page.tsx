@@ -409,11 +409,11 @@ const FlowEditor: React.FC<FlowEditorProps> = ({ searchParams }) => {
   useEffect(() => {
     // Only show modal if auth check is complete and user is not authenticated
     if (checkTokenValidity && !isAuthenticated) {
-       // Check if checkTokenValidity is available before calling
-       const isValid = checkTokenValidity();
-       if (!isValid) {
+      // Check if checkTokenValidity is available before calling
+      const isValid = checkTokenValidity();
+      if (!isValid) {
         setShowLoginModal(true);
-       }
+      }
     } else {
       // Hide modal if authenticated or during initial check
       setShowLoginModal(false);
@@ -1247,6 +1247,6 @@ export default function Home() {
       <Suspense fallback={<div>Loading flow editor...</div>}>
         <FlowWithSearchParams />
       </Suspense>
-      {/* 测试消息组件 */}
+    </ReactFlowProvider>
   );
 }
