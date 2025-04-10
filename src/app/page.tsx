@@ -8,7 +8,6 @@ import type { MenuInfo } from 'rc-menu/lib/interface';
 import { useAuth } from '@/hooks/useAuth';
 import LoginModal from '@/components/LoginModal';
 import { API_ENDPOINTS, getAuthHeaders } from '@/config/api';
-import MessageTest from '@/components/MessageTest';
 import ReactFlow, {
   Controls,
   Background,
@@ -1249,7 +1248,5 @@ export default function Home() {
         <FlowWithSearchParams />
       </Suspense>
       {/* 测试消息组件 */}
-      <MessageTest />
-    </ReactFlowProvider>
   );
 }
