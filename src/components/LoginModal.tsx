@@ -12,10 +12,11 @@ interface LoginModalProps {
 
 const LoginModal: React.FC<LoginModalProps> = ({ open, onCancel, onSuccess }) => {
   const [loading, setLoading] = useState(false);
+  const [messageApi, contextHolder] = message.useMessage();
 
   const handleLogin = async (values: { username: string; password: string }) => {
     setLoading(true);
-    message.loading({ content: '正在登录...', key: 'login' });
+    messageApi.loading({ content: '正在登录...', key: 'login' });
     try {
       const response = await fetch(API_ENDPOINTS.login, {
         method: 'POST',
@@ -35,13 +36,13 @@ const LoginModal: React.FC<LoginModalProps> = ({ open, onCancel, onSuccess }) =>
         localStorage.setItem('auth_token', data.token);
         localStorage.setItem('token_timestamp', Date.now().toString());
         onSuccess(data.token);
-        message.success({ content: '登录成功', key: 'login', duration: 3 });
+        messageApi.success({ content: '登录成功', key: 'login', duration: 3 });
       } else {
         throw new Error('未获取到登录令牌');
       }
     } catch (error) {
       console.error('Login error:', error);
-      message.error({
+      messageApi.error({
         content: '登录失败，请检查用户名和密码',
         key: 'login',
         duration: 3
@@ -58,6 +59,7 @@ const LoginModal: React.FC<LoginModalProps> = ({ open, onCancel, onSuccess }) =>
       onCancel={onCancel}
       footer={null}
     >
+      {contextHolder}
       <Form
         name="login"
         onFinish={handleLogin}

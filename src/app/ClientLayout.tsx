@@ -5,6 +5,7 @@ import { Geist, Geist_Mono } from "next/font/google";
 import { AntdRegistry } from '@ant-design/nextjs-registry';
 import { ConfigProvider, theme } from 'antd';
 import zhCN from 'antd/locale/zh_CN';
+import MessageProvider from '@/components/MessageProvider';
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -31,7 +32,9 @@ export default function ClientLayout({
             locale={zhCN}
             theme={{ algorithm: theme.defaultAlgorithm }}
           >
-            {children}
+            <MessageProvider>
+              {children}
+            </MessageProvider>
           </ConfigProvider>
         </AntdRegistry>
       </body>
