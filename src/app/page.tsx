@@ -258,28 +258,7 @@ const FlowEditor: React.FC<FlowEditorProps> = ({ searchParams }) => {
   const [currentUuid, setCurrentUuid] = useState<string>(generateUuid());
   const [flowchartToDelete, setFlowchartToDelete] = useState<{ uuid: string; tag: string } | null>(null); // State for delete confirmation
 
-  const fetchListTags = async () => {
-    try {
-      const response = await fetch(API_ENDPOINTS.notionListTags, {  // 假设 API_ENDPOINTS.notionListTags 是正确的端点
-        method: 'GET',
-        headers: getAuthHeaders(),
-      });
-      if (response.ok) {
-        const data = await response.json();
-        message.success('查询 list-tags 成功');
-        // 处理数据，例如更新状态
-        console.log(data);
-      } else {
-        throw new Error('查询 list-tags 失败');
-      }
-    } catch (error) {
-      if (error instanceof Error) {
-        message.error(error.message);
-      } else {
-        message.error('An unknown error occurred');
-      }
-    }
-  };
+  // 移除未使用的fetchListTags函数
 
   // Load unsaved changes from localStorage on mount
   useEffect(() => {
@@ -317,8 +296,10 @@ const FlowEditor: React.FC<FlowEditorProps> = ({ searchParams }) => {
     const handleBeforeUnload = (e: BeforeUnloadEvent) => {
       if (hasUnsavedChanges) {
         e.preventDefault();
-        e.returnValue = ''; // Required for Chrome
-        return ''; // Required for other browsers
+        // Chrome requires returnValue to be set
+        const message = '';
+        e.returnValue = message;
+        return message; // Required for other browsers
       }
     };
 
@@ -331,7 +312,7 @@ const FlowEditor: React.FC<FlowEditorProps> = ({ searchParams }) => {
 
   const loadFlowchart = useCallback(async (uuid: string, options: { skipLocalStorageCheck?: boolean } = {}) => {
     if (!isAuthenticated) {
-      message.info('请先登录再加载流程图');
+      message.info({ content: '请先登录再加载流程图', duration: 3 });
       setShowLoginModal(true);
       return;
     }
@@ -339,7 +320,7 @@ const FlowEditor: React.FC<FlowEditorProps> = ({ searchParams }) => {
     console.log('loadFlowchart called for uuid:', uuid);
     setIsLoading(true);
     setHasUnsavedChanges(false);
-    message.loading({ content: '正在加载流程图...', key: 'loadFlow' });
+    message.loading({ content: '正在加载流程图...', key: 'loadFlow', duration: 0 });
 
     if (!options.skipLocalStorageCheck) {
       const localData = loadFromLocalStorage(uuid);
@@ -364,7 +345,8 @@ const FlowEditor: React.FC<FlowEditorProps> = ({ searchParams }) => {
         if (loadFromLocalStorage(uuid)) {
           message.warning({
             content: '与服务器同步失败，显示本地版本',
-            key: 'loadFlow'
+            key: 'loadFlow',
+            duration: 3
           });
         } else {
           throw new Error('加载流程图失败，未找到本地版本');
@@ -385,7 +367,7 @@ const FlowEditor: React.FC<FlowEditorProps> = ({ searchParams }) => {
         setCurrentUuid(data.uuid); // Always ensure UUID is correct from source
         setHasUnsavedChanges(false); // Reset unsaved changes flag after successful load/sync
         localStorage.removeItem(`${LOCAL_STORAGE_PREFIX}new`); // Clear unsaved changes after successful load
-        message.success({ content: '流程图加载成功', key: 'loadFlow' });
+        message.success({ content: '流程图加载成功', key: 'loadFlow', duration: 3 });
       }
     } catch (error) {
       console.error('Failed to load flowchart:', error);
@@ -393,7 +375,8 @@ const FlowEditor: React.FC<FlowEditorProps> = ({ searchParams }) => {
       if (!loadFromLocalStorage(uuid)) {
         message.error({
           content: `加载流程图失败: ${error instanceof Error ? error.message : '未知错误'}`,
-          key: 'loadFlow'
+          key: 'loadFlow',
+          duration: 3
         });
       }
     } finally {
@@ -463,7 +446,7 @@ const FlowEditor: React.FC<FlowEditorProps> = ({ searchParams }) => {
   );
 
   // --- Edge Hover Handlers ---
-  const onEdgeMouseEnter = useCallback((event: React.MouseEvent, edge: Edge) => {
+  const onEdgeMouseEnter = useCallback((_event: React.MouseEvent, edge: Edge) => {
     setHoveredEdgeId(edge.id);
   }, [setHoveredEdgeId]);
 
@@ -589,7 +572,7 @@ const FlowEditor: React.FC<FlowEditorProps> = ({ searchParams }) => {
             setClipboard({ node: null, type: null });
           }
         } else {
-          message.info('Clipboard is empty.');
+          message.info({ content: 'Clipboard is empty.', duration: 3 });
         }
       } else {
         // Add a new node based on the key (text, image, etc.)
@@ -637,25 +620,25 @@ const FlowEditor: React.FC<FlowEditorProps> = ({ searchParams }) => {
       switch (e.key) {
         case 'copy':
           setClipboard({ node: { ...targetNode }, type: 'copy' }); // Store a copy
-          message.success(`Node "${targetNode.data.label || targetNode.id}" copied.`);
+          message.success({ content: `Node "${targetNode.data.label || targetNode.id}" copied.`, duration: 3 });
           break;
         case 'cut':
           setClipboard({ node: { ...targetNode }, type: 'cut' }); // Store a copy for pasting
           // Remove the node and connected edges
           setNodes((nds) => nds.filter((n) => n.id !== targetNodeId));
           setEdges((eds) => eds.filter((edge) => edge.source !== targetNodeId && edge.target !== targetNodeId));
-          message.success(`Node "${targetNode.data.label || targetNode.id}" cut.`);
+          message.success({ content: `Node "${targetNode.data.label || targetNode.id}" cut.`, duration: 3 });
           break;
         case 'break-sort':
           // Remove all edges connected to the node, making it an unsorted task
           setEdges((eds) => eds.filter((edge) => edge.source !== targetNodeId && edge.target !== targetNodeId));
-          message.success(`Node "${targetNode.data.label || targetNode.id}" moved to unsorted tasks.`);
+          message.success({ content: `Node "${targetNode.data.label || targetNode.id}" moved to unsorted tasks.`, duration: 3 });
           break;
         case 'delete':
           // Remove the node and connected edges
           setNodes((nds) => nds.filter((n) => n.id !== targetNodeId));
           setEdges((eds) => eds.filter((edge) => edge.source !== targetNodeId && edge.target !== targetNodeId));
-          message.success(`Node "${targetNode.data.label || targetNode.id}" deleted.`);
+          message.success({ content: `Node "${targetNode.data.label || targetNode.id}" deleted.`, duration: 3 });
           break;
       }
 
@@ -705,11 +688,11 @@ const FlowEditor: React.FC<FlowEditorProps> = ({ searchParams }) => {
       if (data.flowcharts) {
         // Ensure the fetched data matches the new type
         setFlowcharts(data.flowcharts as Array<{ tag: string; uuid: string; created_time: string }>);
-        message.success({ content: '标签列表获取成功', key: 'fetchTags' });
+        message.success({ content: '标签列表获取成功', key: 'fetchTags', duration: 3 });
       }
     } catch (error) {
       console.error('Failed to fetch flowcharts:', error);
-      message.error({ content: '获取标签列表失败', key: 'fetchTags' });
+      message.error({ content: '获取标签列表失败', key: 'fetchTags', duration: 3 });
     }
   }, [isAuthenticated]);
 
@@ -771,23 +754,23 @@ const FlowEditor: React.FC<FlowEditorProps> = ({ searchParams }) => {
   // Function to actually perform the save operation with a tag
   const confirmSave = async (tag: string) => {
     if (!isAuthenticated) {
-      message.info('请先登录再保存流程图');
+      message.info({ content: '请先登录再保存流程图', duration: 3 });
       setShowLoginModal(true);
       return;
     }
 
     if (!tag) {
-      message.error('标签名称不能为空');
+      message.error({ content: '标签名称不能为空', duration: 3 });
       return;
     }
     if (!reactFlowInstance) {
-      message.error('流程图实例未就绪');
+      message.error({ content: '流程图实例未就绪', duration: 3 });
       return;
     }
     const currentNodes = nodes;
     const currentEdges = edges;
     if (!currentNodes || currentNodes.length === 0) {
-      message.warning('画布为空，没有内容可保存');
+      message.warning({ content: '画布为空，没有内容可保存', duration: 3 });
       return;
     }
 
@@ -858,13 +841,13 @@ const FlowEditor: React.FC<FlowEditorProps> = ({ searchParams }) => {
   // Modified handleSave to just open the modal
   const handleSave = () => {
     if (!isAuthenticated) {
-      message.info('请先登录再保存流程图');
+      message.info({ content: '请先登录再保存流程图', duration: 3 });
       setShowLoginModal(true);
       return;
     }
 
     if (!nodes || nodes.length === 0) {
-      message.warning('画布为空，没有内容可保存');
+      message.warning({ content: '画布为空，没有内容可保存', duration: 3 });
       return;
     }
     // Use current tag as default value
@@ -892,7 +875,7 @@ const FlowEditor: React.FC<FlowEditorProps> = ({ searchParams }) => {
     if (!flowchartToDelete) return;
 
     if (!isAuthenticated) {
-      message.info('请先登录再删除流程图');
+      message.info({ content: '请先登录再删除流程图', duration: 3 });
       setShowLoginModal(true);
       setFlowchartToDelete(null); // 关闭删除确认框
       return;
@@ -933,7 +916,7 @@ const FlowEditor: React.FC<FlowEditorProps> = ({ searchParams }) => {
         setHasUnsavedChanges(false);
         // THEN clear URL params, which might trigger the searchParams effect
         router.push('/', { scroll: false });
-        message.info('当前流程图已被删除，已创建新的空白流程图');
+        message.info({ content: '当前流程图已被删除，已创建新的空白流程图', duration: 3 });
       }
 
     } catch (error) {
@@ -954,7 +937,8 @@ const FlowEditor: React.FC<FlowEditorProps> = ({ searchParams }) => {
         onSuccess={(token) => {
           login(token);
           setShowLoginModal(false);
-          fetchListTags();  // 新增：登录后查询 list-tags API
+          // 移除这里的fetchListTags调用，避免重复请求
+          // 登录状态变化会触发useEffect中的fetchFlowcharts
         }}
       />
       <Layout style={layoutStyle}>

@@ -35,7 +35,7 @@ const LoginModal: React.FC<LoginModalProps> = ({ open, onCancel, onSuccess }) =>
         localStorage.setItem('auth_token', data.token);
         localStorage.setItem('token_timestamp', Date.now().toString());
         onSuccess(data.token);
-        message.success({ content: '登录成功', key: 'login' });
+        message.success({ content: '登录成功', key: 'login', duration: 3 });
       } else {
         throw new Error('未获取到登录令牌');
       }
@@ -43,7 +43,8 @@ const LoginModal: React.FC<LoginModalProps> = ({ open, onCancel, onSuccess }) =>
       console.error('Login error:', error);
       message.error({
         content: '登录失败，请检查用户名和密码',
-        key: 'login'
+        key: 'login',
+        duration: 3
       });
     } finally {
       setLoading(false);
