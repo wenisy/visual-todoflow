@@ -917,7 +917,7 @@ const FlowEditor: React.FC<FlowEditorProps> = ({ searchParams }) => {
                     setShowLoginModal(true);
                   }}
                 >
-                  退出登录
+                  退出
                 </Button>
               </Space>
             </>
