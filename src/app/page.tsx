@@ -241,8 +241,8 @@ interface FlowEditorProps {
 }
 
 const FlowEditor: React.FC<FlowEditorProps> = ({ searchParams }) => {
-  const { isAuthenticated, login, logout } = useAuth();
-  const [showLoginModal, setShowLoginModal] = useState(!isAuthenticated);
+  const { isAuthenticated, login, logout, checkTokenValidity } = useAuth(); // Import checkTokenValidity
+  const [showLoginModal, setShowLoginModal] = useState(false); // Initialize to false
   const router = useRouter();
   const reactFlowWrapper = useRef<HTMLDivElement>(null);
   const [nodes, setNodes] = useState<Node[]>(initialNodes);
@@ -400,6 +400,22 @@ const FlowEditor: React.FC<FlowEditorProps> = ({ searchParams }) => {
     attachment: AttachmentNode,
     social: SocialNode,
   }), []);
+
+  // Effect to control login modal based on auth state
+  useEffect(() => {
+    // Only show modal if auth check is complete and user is not authenticated
+    if (checkTokenValidity && !isAuthenticated) {
+       // Check if checkTokenValidity is available before calling
+       const isValid = checkTokenValidity();
+       if (!isValid) {
+        setShowLoginModal(true);
+       }
+    } else {
+      // Hide modal if authenticated or during initial check
+      setShowLoginModal(false);
+    }
+    // Add checkTokenValidity to dependency array if it's stable (useCallback)
+  }, [isAuthenticated, checkTokenValidity]);
 
   const onNodesChange = useCallback(
     (changes: NodeChange[]) => {
@@ -936,6 +952,7 @@ const FlowEditor: React.FC<FlowEditorProps> = ({ searchParams }) => {
         onCancel={() => setShowLoginModal(false)}
         onSuccess={(token) => {
           login(token);
+          message.success('登录成功!'); // Add success message
           setShowLoginModal(false);
           // 移除这里的fetchListTags调用，避免重复请求
           // 登录状态变化会触发useEffect中的fetchFlowcharts
