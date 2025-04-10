@@ -258,6 +258,29 @@ const FlowEditor: React.FC<FlowEditorProps> = ({ searchParams }) => {
   const [currentUuid, setCurrentUuid] = useState<string>(generateUuid());
   const [flowchartToDelete, setFlowchartToDelete] = useState<{ uuid: string; tag: string } | null>(null); // State for delete confirmation
 
+  const fetchListTags = async () => {
+    try {
+      const response = await fetch(API_ENDPOINTS.notionListTags, {  // 假设 API_ENDPOINTS.notionListTags 是正确的端点
+        method: 'GET',
+        headers: getAuthHeaders(),
+      });
+      if (response.ok) {
+        const data = await response.json();
+        message.success('查询 list-tags 成功');
+        // 处理数据，例如更新状态
+        console.log(data);
+      } else {
+        throw new Error('查询 list-tags 失败');
+      }
+    } catch (error) {
+      if (error instanceof Error) {
+        message.error(error.message);
+      } else {
+        message.error('An unknown error occurred');
+      }
+    }
+  };
+
   // Load unsaved changes from localStorage on mount
   useEffect(() => {
     const unsavedData = localStorage.getItem(`${LOCAL_STORAGE_PREFIX}new`);
@@ -869,6 +892,7 @@ const FlowEditor: React.FC<FlowEditorProps> = ({ searchParams }) => {
         onSuccess={(token) => {
           login(token);
           setShowLoginModal(false);
+          fetchListTags();  // 新增：登录后查询 list-tags API
         }}
       />
       <Layout style={layoutStyle}>
